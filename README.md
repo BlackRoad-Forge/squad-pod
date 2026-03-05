@@ -1,4 +1,6 @@
-# Squad Pod 🍩
+![Squad](https://bradygaster.github.io/squad/assets/squad-logo.png)
+
+# Squad Pod
 
 **Your Squad AI team, but make it pixel art.**
 
