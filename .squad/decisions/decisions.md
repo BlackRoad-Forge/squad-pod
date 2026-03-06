@@ -1,5 +1,42 @@
 # Decisions
 
+## Squad Pod: Telemetry Test Coverage — Extension Host
+
+**Decision Date:** 2025-07-24
+**Author:** Marge Simpson (Tester)
+**Status:** Implemented
+
+### Context
+
+The telemetry drawer feature added `makeTelemetryEvent()` and telemetry emission in `updateAgentStatus()`. These needed test coverage before the feature ships.
+
+### Decision
+
+Added 9 telemetry-specific test cases to the existing `src/agentManager.test.ts` file rather than creating a separate test file, following the project convention of co-locating tests with their source modules.
+
+### What's Covered
+
+- Telemetry event emission on every status transition (active, idle, waiting)
+- Correct `TelemetryEvent` structure (id, timestamp, category, agentId, agentName, summary)
+- Summary text correctness for each status label
+- Task inclusion/exclusion in summaries
+- Category is always `'status'` for agentManager-sourced events
+- Unique IDs across multiple events
+- No telemetry for unknown agents (guards the early-return path)
+
+### What's NOT Covered (and why)
+
+- `SquadPodViewProvider.emitTelemetry()` — private method requiring full VS Code API mocks. The agentManager path exercises the same `TelemetryEvent` shape. If the team wants provider-level tests, that's a separate effort requiring VS Code mock infrastructure.
+- Webview-side `TelemetryDrawer` component and 200-event buffer — those belong in the webview test suite (`webview-ui/`), not extension host tests.
+
+### Team Impact
+
+- Extension test count: 37 → 46
+- All existing tests continue to pass
+- Future telemetry changes to `updateAgentStatus()` will be caught by regression tests
+
+---
+
 ## Squad Pod: TypeScript Interface Alignment — Engine Layer
 
 **Decision Date:** 2026-03-05  

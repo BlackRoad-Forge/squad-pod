@@ -241,7 +241,43 @@ Implemented the webview side of the "Desk-as-directory" feature using a click de
 - Animation on card appearance/dismissal for polish
 - Could cache recent detail loads to reduce extension → webview round-trips
 
-### 5. Unit Test Suite for Extension Host Code
+### 5. Telemetry Drawer Feature — Architecture & Review
+
+**Decision Date:** 2026-03-05  
+**Author:** Homer Simpson  
+**Status:** Approved  
+
+#### Context
+
+We needed a way to see what the heck the agents are doing without staring at raw log files. The team implemented a "Telemetry Drawer" — a slide-up panel in the webview that streams live events.
+
+#### Decision
+
+**Approve the current implementation.**
+
+The design follows our "keep it simple, stupid" philosophy:
+1.  **Protocol:** Uses the existing `postMessage` pipeline. No new sockets or weird connections.
+2.  **Data Flow:** Extension host (source of truth) -> Webview (renderer). One-way flow for telemetry.
+3.  **Buffering:** Webview keeps a rolling buffer of 200 events. Prevents memory leaks if you leave it running overnight.
+4.  **Types:** Yes, `TelemetryEvent` is duplicated in `src/types.ts` and `webview-ui/src/office/types.ts`. This is fine. Sharing code between Node and Browser builds is a headache we don't need right now.
+
+#### Feedback
+
+-   **Performance:** The 200-item limit is smart. React handles that easily.
+-   **UX:** The "Unread" badge logic in `App.tsx` (`total - seen`) is a nice touch.
+-   **Code:** Inline styles in `TelemetryDrawer` are ugly but functional. I'll let it slide because it keeps the component self-contained.
+
+#### Consequences
+
+-   **Positive:** We can now debug agent behavior visually.
+-   **Negative:** If we change the `TelemetryEvent` shape, we have to update it in two places. (Don't change it often.)
+
+#### Sign-off
+
+🍩 **Homer Simpson**  
+*Lead / Architect*
+
+### 6. Unit Test Suite for Extension Host Code
 
 **Decision Date:** 2026-07-24  
 **Author:** Lisa Simpson  
