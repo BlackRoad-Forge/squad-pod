@@ -45,3 +45,29 @@
 - Used casual language ("cozy pixel art office," "watch your team come alive")
 - Emphasized zero-friction onboarding ("no manual setup needed," "appears automatically")
 - Celebration at the end (emojis, encouragement)
+
+### Telemetry Feed Documentation (Session 2)
+
+**What was added:** Two-part documentation of the Telemetry Feed Drawer feature:
+
+1. **Features list update** — Added "Telemetry feed" as a bullet item in the main Features section (line 20):
+   - One-liner that captures the essential benefit: "click the 📡 button to open a live stream of all Squad agent activity"
+   - Includes the key attributes: color-coded by type, shows timestamps and agent names
+
+2. **New "Telemetry Feed" section** (lines 88–103) — Placed after Layout Editor section:
+   - **What You'll See** subsection — 6 bullet points covering the visual experience:
+     - Color-coded event types with emoji indicators
+     - Timestamps on every event
+     - Agent names for context
+     - Event summaries with readable examples
+     - Expandable detail rows
+     - Unread badge for notifications
+   - **How It Works** subsection — Explains the architecture in plain language:
+     - `.squad/` directory watching (extension side)
+     - Internal messaging protocol (postMessage)
+     - Event buffering (200-item rolling buffer)
+     - Auto-scroll behavior with manual "Latest" control
+
+3. **Structural decision** — Renamed the old "How It Works" section to "File Watching & Activity Detection" to avoid duplication and clarify scope.
+
+**Why this placement:** Telemetry Feed follows Layout Editor (tools for understanding the office) and precedes File Watching (technical deep dive). Users encounter the feature before the internals.
