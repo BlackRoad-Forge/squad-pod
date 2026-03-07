@@ -483,23 +483,52 @@ function getNonce(): string {
 /**
  * Create a minimal empty layout when no layout source is available.
  * This ensures the webview can always render, even without assets.
+ * Format matches the webview's OfficeLayout type.
  */
 function createMinimalLayout(): LayoutData {
+  const cols = 20;
+  const rows = 15;
+  const tiles: number[] = [];
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) {
+        tiles.push(0); // WALL
+      } else {
+        tiles.push(1); // FLOOR_1
+      }
+    }
+  }
+
+  const furniture = [
+    { uid: 'desk-1', type: 'desk', col: 4, row: 3, rotation: 0 },
+    { uid: 'chair-1', type: 'chair', col: 4, row: 4, rotation: 0 },
+    { uid: 'desk-2', type: 'desk', col: 10, row: 3, rotation: 0 },
+    { uid: 'chair-2', type: 'chair', col: 10, row: 4, rotation: 0 },
+    { uid: 'desk-3', type: 'desk', col: 4, row: 7, rotation: 0 },
+    { uid: 'chair-3', type: 'chair', col: 4, row: 8, rotation: 0 },
+    { uid: 'desk-4', type: 'desk', col: 10, row: 7, rotation: 0 },
+    { uid: 'chair-4', type: 'chair', col: 10, row: 8, rotation: 0 },
+  ];
+
+  // Populate tileColors so the renderer draws every tile
+  const floorColor = { h: 210, s: 25, b: 0, c: 0 };
+  const wallColor  = { h: 30,  s: 15, b: -20, c: 0 };
+  const tileColors: Record<string, { h: number; s: number; b: number; c: number }> = {};
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const isWall = r === 0 || r === rows - 1 || c === 0 || c === cols - 1;
+      tileColors[`${c},${r}`] = isWall ? { ...wallColor } : { ...floorColor };
+    }
+  }
+
   return {
     version: 1,
-    rooms: [
-      {
-        id: 'main-room',
-        x: 0,
-        y: 0,
-        width: 20,
-        height: 15,
-        wallType: 'default',
-        floorType: 0,
-      },
-    ],
-    furniture: [],
-    seats: [],
+    cols,
+    rows,
+    tiles,
+    furniture,
+    tileColors,
   };
 }
 

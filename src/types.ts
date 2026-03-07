@@ -58,37 +58,31 @@ export interface FurnitureAsset {
   sprite: SpriteData;
 }
 
-export interface LayoutData {
-  version: number;
-  rooms: LayoutRoom[];
-  furniture: LayoutFurniture[];
-  seats: LayoutSeat[];
+export interface FloorColor {
+  h: number;
+  s: number;
+  b: number;
+  c: number;
+  colorize?: boolean;
 }
 
-export interface LayoutRoom {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  wallType?: string;
-  floorType?: number;
-}
-
-export interface LayoutFurniture {
-  id: string;
+export interface PlacedFurniture {
+  uid: string;
   type: string;
-  x: number;
-  y: number;
-  roomId?: string;
+  col: number;
+  row: number;
+  rotation: number;
+  color?: FloorColor;
+  state?: string;
 }
 
-export interface LayoutSeat {
-  id: string;
-  x: number;
-  y: number;
-  direction: string;
-  roomId?: string;
+export interface LayoutData {
+  version?: number;
+  cols: number;
+  rows: number;
+  tiles: number[];
+  furniture: PlacedFurniture[];
+  tileColors?: Record<string, FloorColor>;
 }
 
 export interface CharacterSpriteSet {
