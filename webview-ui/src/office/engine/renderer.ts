@@ -87,6 +87,7 @@ export function renderTileGrid(
 }
 
 let _sceneLogCount = 0;
+let _lastCharCount = 0;
 
 export function renderScene(
   ctx: CanvasRenderingContext2D,
@@ -98,13 +99,18 @@ export function renderScene(
   selectedAgentId: string | null,
   hoveredAgentId: string | null
 ): void {
-  if (_sceneLogCount < 3) {
+  // Log first 3 frames AND any time character count changes (catches late-arriving agents)
+  const shouldLog = _sceneLogCount < 3 || characters.length !== _lastCharCount;
+  if (shouldLog) {
     _sceneLogCount++;
-    console.log('[renderScene] furniture:', furniture.length, 'characters:', characters.length, 'offset:', offsetX, offsetY, 'zoom:', zoom);
+    _lastCharCount = characters.length;
+    console.log('[renderScene] furniture:', furniture.length, 'characters:', characters.length, 'offset:', offsetX.toFixed(1), offsetY.toFixed(1), 'zoom:', zoom);
     for (const ch of characters) {
       const sprites = getCharacterSprites(ch.palette, ch.hueShift);
       const sprite = getCharacterSprite(ch, sprites);
-      console.log(`[renderScene] char "${ch.name}" col=${ch.col} row=${ch.row} state=${ch.state} palette=${ch.palette} spriteH=${sprite.length} spriteW=${sprite[0]?.length} firstPixel="${sprite[0]?.[0]}" hasColors=${sprite.some(r => r.some(c => c !== ''))}`);
+      const hasColors = sprite.some(r => r.some(c => c !== ''));
+      const spriteCanvas = getCachedSprite(sprite, zoom);
+      console.log(`[renderScene] char "${ch.name}" col=${ch.col} row=${ch.row} x=${ch.x} y=${ch.y} state=${ch.state} dir=${ch.direction} palette=${ch.palette} hueShift=${ch.hueShift} spriteH=${sprite.length} spriteW=${sprite[0]?.length} hasColors=${hasColors} cachedCanvas=${spriteCanvas.width}x${spriteCanvas.height}`);
     }
   }
   const drawables: Drawable[] = [];
@@ -157,6 +163,16 @@ export function renderScene(
   }
 
   drawables.sort((a, b) => a.z - b.z);
+
+  // Log drawable breakdown once when characters first appear
+  if (shouldLog && characters.length > 0) {
+    const charDrawables = drawables.filter(d => d.type === 'character');
+    const furnDrawables = drawables.filter(d => d.type === 'furniture');
+    console.log(`[renderScene] drawables: ${drawables.length} total (${furnDrawables.length} furniture, ${charDrawables.length} characters)`);
+    for (const d of charDrawables) {
+      console.log(`[renderScene] char drawable at x=${d.x.toFixed(1)} y=${d.y.toFixed(1)} z=${d.z.toFixed(1)} spriteSize=${d.sprite[0]?.length}x${d.sprite.length}`);
+    }
+  }
 
   for (const drawable of drawables) {
     if (drawable.outlineSprite && drawable.outlineAlpha && drawable.outlineAlpha > 0) {

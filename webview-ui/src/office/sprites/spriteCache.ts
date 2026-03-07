@@ -52,6 +52,8 @@ export function getOutlineSprite(sprite: SpriteData): SpriteData {
   return outline;
 }
 
+let _spriteCreateCount = 0;
+
 export function getCachedSprite(sprite: SpriteData, zoom: number): HTMLCanvasElement {
   let zoomMap = spriteCanvasCache.get(sprite);
   if (!zoomMap) {
@@ -71,14 +73,22 @@ export function getCachedSprite(sprite: SpriteData, zoom: number): HTMLCanvasEle
   const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingEnabled = false;
 
+  let pixelCount = 0;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const color = sprite[y][x];
       if (color && color !== '') {
         ctx.fillStyle = color;
         ctx.fillRect(x * zoom, y * zoom, zoom, zoom);
+        pixelCount++;
       }
     }
+  }
+
+  // Log first 10 sprite canvas creations to debug
+  if (_spriteCreateCount < 10) {
+    _spriteCreateCount++;
+    console.log(`[getCachedSprite] created ${width}x${height} canvas (${canvas.width}x${canvas.height}px) zoom=${zoom} pixels=${pixelCount}/${width * height}`);
   }
 
   zoomMap.set(zoom, canvas);

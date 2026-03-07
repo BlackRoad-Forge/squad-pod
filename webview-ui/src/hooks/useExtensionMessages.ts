@@ -41,6 +41,12 @@ export function useExtensionMessages(
   const [agentDetail, setAgentDetail] = useState<AgentDetailInfo | null>(null);
   const [telemetryEvents, setTelemetryEvents] = useState<TelemetryEvent[]>([]);
   const bufferedAgentsRef = useRef<AgentInfo[]>([]);
+  const agentsRef = useRef<string[]>([]);
+  const layoutReadyRef = useRef(false);
+
+  // Keep refs in sync with state so the message handler always sees current values
+  agentsRef.current = agents;
+  layoutReadyRef.current = layoutReady;
 
   const clearTelemetry = useCallback(() => setTelemetryEvents([]), []);
 
@@ -165,12 +171,12 @@ export function useExtensionMessages(
 
         case 'existingAgents': {
           const { agents: existingAgents, agentMeta } = message;
-          if (!layoutReady) {
+          if (!layoutReadyRef.current) {
             bufferedAgentsRef.current = existingAgents;
           } else {
             const officeState = getOfficeState();
             for (const agent of existingAgents) {
-              if (!agents.includes(agent.id)) {
+              if (!agentsRef.current.includes(agent.id)) {
                 setAgents((prev) => [...prev, agent.id]);
                 const meta = agentMeta?.[agent.id];
                 officeState.addAgent(
@@ -200,7 +206,7 @@ export function useExtensionMessages(
           if (bufferedAgentsRef.current.length > 0) {
             const existingAgents = bufferedAgentsRef.current;
             for (const agent of existingAgents) {
-              if (!agents.includes(agent.id)) {
+              if (!agentsRef.current.includes(agent.id)) {
                 setAgents((prev) => [...prev, agent.id]);
                 officeState.addAgent(agent.id, agent.name, agent.role);
               }
@@ -278,7 +284,8 @@ export function useExtensionMessages(
     vscode.postMessage({ type: 'webviewReady' });
 
     return () => window.removeEventListener('message', handleMessage);
-  }, [agents, layoutReady, getOfficeState, onLayoutLoaded]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getOfficeState, onLayoutLoaded]);
 
   return {
     agents,
