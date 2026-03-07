@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { OfficeState } from '../engine/officeState.js';
 import type { EditorState } from '../editor/editorState.js';
 import { EditTool, TileType } from '../types.js';
