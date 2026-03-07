@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { OfficeState } from '../office/engine/officeState.js';
+import { CharacterState } from '../office/types.js';
 
 // Palette shirt colors — must match defaultCharacters.ts palettes
 const PALETTE_COLORS = [
@@ -22,11 +23,13 @@ interface LabelPosition {
   agentId: string;
   name: string;
   role: string;
-  x: number;
-  y: number;
+  labelX: number;
+  labelY: number;
   avatarX: number;
   avatarY: number;
   isActive: boolean;
+  state: string;
+  tool: string | undefined;
   bubbleType: 'permission' | 'waiting' | null;
   isSelected: boolean;
   palette: number;
@@ -40,20 +43,24 @@ export function AgentLabels({ officeState, zoom, panRef, onAgentClick }: AgentLa
     const updatePositions = () => {
       const positions: LabelPosition[] = [];
       for (const [agentId, char] of officeState.characters) {
-        const screenX = char.x * zoom + panRef.current!.x;
-        const screenY = char.y * zoom + panRef.current!.y - 30 * zoom;
-        // Avatar position: centered on the character's tile position
-        const avatarX = char.col * 16 * zoom + panRef.current!.x;
-        const avatarY = char.row * 16 * zoom + panRef.current!.y;
+        // Use char.x/y for smooth movement tracking
+        const px = panRef.current!.x;
+        const py = panRef.current!.y;
+        const avatarX = char.x * zoom + px - 8 * zoom;
+        const avatarY = char.y * zoom + py - 20 * zoom;
+        const labelX = char.x * zoom + px;
+        const labelY = avatarY - 14;
         positions.push({
           agentId,
           name: char.name || agentId,
           role: char.role || '',
-          x: screenX,
-          y: screenY,
+          labelX,
+          labelY,
           avatarX,
           avatarY,
           isActive: char.active,
+          state: char.state,
+          tool: char.tool,
           bubbleType: char.bubbleState.type === 'none' ? null : (char.bubbleState.type as 'permission' | 'waiting'),
           isSelected: officeState.selectedAgentId === agentId,
           palette: char.palette,
@@ -68,10 +75,30 @@ export function AgentLabels({ officeState, zoom, panRef, onAgentClick }: AgentLa
     };
   }, [officeState, zoom, panRef]);
 
-  const avatarSize = Math.max(12, 16 * zoom);
+  const avatarW = Math.max(14, 16 * zoom);
+  const avatarH = Math.max(21, 24 * zoom);
 
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 20 }}>
+      <style>{`
+        @keyframes avatar-typing {
+          0%, 100% { transform: translateY(0); }
+          25% { transform: translateY(-1px); }
+          50% { transform: translateY(0); }
+          75% { transform: translateY(1px); }
+        }
+        @keyframes avatar-walk {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-2px); }
+        }
+        @keyframes avatar-active-glow {
+          0%, 100% { box-shadow: 0 0 4px rgba(96,165,250,0.4), 0 2px 4px rgba(0,0,0,0.5); }
+          50% { box-shadow: 0 0 10px rgba(96,165,250,0.8), 0 2px 4px rgba(0,0,0,0.5); }
+        }
+        .avatar-typing { animation: avatar-typing 0.4s ease-in-out infinite; }
+        .avatar-walk { animation: avatar-walk 0.35s ease-in-out infinite; }
+        .avatar-active-glow { animation: avatar-active-glow 1.5s ease-in-out infinite; }
+      `}</style>
       {labelPositions.map((pos) => {
         let dotColor = 'transparent';
         let dotClass = '';
@@ -83,11 +110,16 @@ export function AgentLabels({ officeState, zoom, panRef, onAgentClick }: AgentLa
         }
 
         const baseColor = PALETTE_COLORS[pos.palette % PALETTE_COLORS.length];
+        const isTyping = pos.state === CharacterState.TYPE;
+        const isWalking = pos.state === CharacterState.WALK;
+        const avatarAnimClass = isTyping ? 'avatar-typing' : isWalking ? 'avatar-walk' : '';
+        const glowClass = pos.isActive ? 'avatar-active-glow' : '';
 
         return (
           <div key={pos.agentId}>
-            {/* Colored character avatar box */}
+            {/* Colored character avatar */}
             <div
+              className={`${avatarAnimClass} ${glowClass}`.trim()}
               onClick={(e) => {
                 e.stopPropagation();
                 onAgentClick?.(pos.agentId, e.clientX, e.clientY);
@@ -96,11 +128,13 @@ export function AgentLabels({ officeState, zoom, panRef, onAgentClick }: AgentLa
                 position: 'absolute',
                 left: pos.avatarX,
                 top: pos.avatarY,
-                width: avatarSize,
-                height: avatarSize * 1.5,
+                width: avatarW,
+                height: avatarH,
                 background: baseColor,
-                border: pos.isSelected ? '2px solid #fbbf24' : '2px solid rgba(255,255,255,0.5)',
-                borderRadius: `${Math.max(2, avatarSize * 0.2)}px ${Math.max(2, avatarSize * 0.2)}px 2px 2px`,
+                border: pos.isSelected ? '2px solid #fbbf24'
+                  : pos.isActive ? '2px solid #60a5fa'
+                  : '2px solid rgba(255,255,255,0.4)',
+                borderRadius: `${Math.max(2, avatarW * 0.2)}px ${Math.max(2, avatarW * 0.2)}px 2px 2px`,
                 boxShadow: '0 2px 4px rgba(0,0,0,0.5)',
                 cursor: 'pointer',
                 pointerEvents: 'auto',
@@ -109,20 +143,49 @@ export function AgentLabels({ officeState, zoom, panRef, onAgentClick }: AgentLa
                 alignItems: 'center',
                 justifyContent: 'flex-start',
                 overflow: 'hidden',
+                transition: 'left 0.08s linear, top 0.08s linear',
               }}
             >
               {/* Head */}
               <div
                 style={{
-                  width: avatarSize * 0.55,
-                  height: avatarSize * 0.55,
+                  width: avatarW * 0.5,
+                  height: avatarW * 0.5,
                   borderRadius: '50%',
                   background: '#FDBCB4',
-                  marginTop: avatarSize * 0.1,
+                  marginTop: avatarW * 0.1,
                   border: '1px solid rgba(0,0,0,0.2)',
                 }}
               />
+              {/* Activity indicator inside body */}
+              {isTyping && (
+                <div style={{
+                  marginTop: 2,
+                  fontSize: Math.max(8, avatarW * 0.4),
+                  lineHeight: 1,
+                }}>⌨️</div>
+              )}
             </div>
+
+            {/* Tool bubble */}
+            {pos.isActive && pos.tool && (
+              <div style={{
+                position: 'absolute',
+                left: pos.avatarX + avatarW + 4,
+                top: pos.avatarY - 2,
+                background: 'rgba(0,0,0,0.75)',
+                color: '#60a5fa',
+                fontSize: '9px',
+                fontWeight: 600,
+                padding: '2px 5px',
+                borderRadius: '4px',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'none',
+              }}>
+                {pos.tool}
+              </div>
+            )}
+
             {/* Name label (clickable) */}
             <div
               onClick={(e) => {
@@ -131,8 +194,8 @@ export function AgentLabels({ officeState, zoom, panRef, onAgentClick }: AgentLa
               }}
               style={{
                 position: 'absolute',
-                left: pos.x,
-                top: pos.y,
+                left: pos.labelX,
+                top: pos.labelY,
                 transform: 'translateX(-50%)',
                 textAlign: 'center',
                 fontSize: '11px',
@@ -160,7 +223,7 @@ export function AgentLabels({ officeState, zoom, panRef, onAgentClick }: AgentLa
                 />
                 <span>{pos.name}</span>
               </div>
-              {pos.role && <div style={{ fontSize: '9px', opacity: 0.8 }}>{pos.role}</div>}
+              {pos.role && <div style={{ fontSize: '9px', opacity: 0.7 }}>{pos.role}</div>}
             </div>
           </div>
         );
