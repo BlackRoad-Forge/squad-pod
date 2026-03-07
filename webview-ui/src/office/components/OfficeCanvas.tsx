@@ -160,36 +160,6 @@ export function OfficeCanvas({
           officeState.hoveredTile,
           officeState.seats
         );
-
-        // DIAGNOSTIC: Draw bright markers at character positions
-        // This bypasses all sprite/drawable logic — purely position-based
-        if (chars.length > 0) {
-          const px = panRef.current!.x;
-          const py = panRef.current!.y;
-          for (const c of chars) {
-            // Characters use col/row for tile position
-            const sx = px + c.col * 16 * zoom;
-            const sy = py + c.row * 16 * zoom;
-            // Large bright magenta circle
-            ctx.save();
-            ctx.fillStyle = '#FF00FF';
-            ctx.globalAlpha = 0.9;
-            ctx.beginPath();
-            ctx.arc(sx + 8 * zoom, sy + 8 * zoom, 6 * zoom, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-          }
-        }
-        // Also draw a green indicator showing character count + debug info
-        ctx.save();
-        ctx.fillStyle = chars.length > 0 ? '#00FF00' : '#FF0000';
-        ctx.font = '14px monospace';
-        ctx.fillText(`chars: ${chars.length}  zoom: ${zoom}  dpr: ${dpr}  furn: ${officeState.furniture.length}  seats: ${officeState.seats.length}`, 10, 20);
-        if (chars.length > 0) {
-          const c0 = chars[0];
-          ctx.fillText(`[0] id=${c0.id} col=${c0.col} row=${c0.row} pal=${c0.palette}`, 10, 36);
-        }
-        ctx.restore();
       },
     });
 
@@ -238,7 +208,6 @@ export function OfficeCanvas({
           onEditorTileAction?.(col, row);
         }
       } else {
-        console.log(`[click] screen=(${screenX.toFixed(0)},${screenY.toFixed(0)}) tile=(${col},${row}) chars=${officeState.characters.size} seats=${officeState.seats.length}`);
         let clickedAgentId: string | null = null;
         for (const [id, char] of officeState.characters) {
           const charScreenX = char.x * zoom + panRef.current!.x;
@@ -247,25 +216,19 @@ export function OfficeCanvas({
           const hitRight = charScreenX + CHARACTER_HIT_HALF_WIDTH * zoom;
           const hitTop = charScreenY - CHARACTER_HIT_HEIGHT * zoom;
           const hitBottom = charScreenY;
-          console.log(`[click] char "${char.name}" hitBox: [${hitLeft.toFixed(0)},${hitTop.toFixed(0)}]-[${hitRight.toFixed(0)},${hitBottom.toFixed(0)}] charPos=(${char.x},${char.y}) col=${char.col} row=${char.row}`);
           if (screenX >= hitLeft && screenX <= hitRight && screenY >= hitTop && screenY <= hitBottom) {
             clickedAgentId = id;
-            console.log(`[click] HIT character: ${id}`);
             break;
           }
         }
         
-        // If character was clicked directly, also trigger card (not just desk clicks)
         if (clickedAgentId) {
           onDeskClick?.(clickedAgentId, e.clientX, e.clientY);
         }
         
-        // If no character sprite was clicked, check for desk/seat clicks
         if (!clickedAgentId) {
           let seatId = officeState.getSeatAtTile(col, row);
-          console.log(`[click] getSeatAtTile(${col},${row}) => ${seatId}`);
           
-          // If no seat at exact tile, check adjacent tiles
           if (!seatId) {
             const adjacentOffsets = [
               [-1, 0], [1, 0], [0, -1], [0, 1],
@@ -273,17 +236,12 @@ export function OfficeCanvas({
             ];
             for (const [dc, dr] of adjacentOffsets) {
               seatId = officeState.getSeatAtTile(col + dc, row + dr);
-              if (seatId) {
-                console.log(`[click] found seat at adjacent (${col + dc},${row + dr}): ${seatId}`);
-                break;
-              }
+              if (seatId) break;
             }
           }
           
-          // If a seat was found, check if it's occupied
           if (seatId) {
             const seat = officeState.seats.find(s => s.id === seatId);
-            console.log(`[click] seat occupant: ${seat?.occupant}`);
             if (seat?.occupant) {
               clickedAgentId = seat.occupant;
               onDeskClick?.(seat.occupant, e.clientX, e.clientY);

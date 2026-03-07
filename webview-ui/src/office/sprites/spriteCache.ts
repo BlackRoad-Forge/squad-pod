@@ -52,8 +52,6 @@ export function getOutlineSprite(sprite: SpriteData): SpriteData {
   return outline;
 }
 
-let _spriteCreateCount = 0;
-
 export function getCachedSprite(sprite: SpriteData, zoom: number): HTMLCanvasElement {
   let zoomMap = spriteCanvasCache.get(sprite);
   if (!zoomMap) {
@@ -83,12 +81,6 @@ export function getCachedSprite(sprite: SpriteData, zoom: number): HTMLCanvasEle
         pixelCount++;
       }
     }
-  }
-
-  // Log first 10 sprite canvas creations to debug
-  if (_spriteCreateCount < 10) {
-    _spriteCreateCount++;
-    console.log(`[getCachedSprite] created ${width}x${height} canvas (${canvas.width}x${canvas.height}px) zoom=${zoom} pixels=${pixelCount}/${width * height}`);
   }
 
   zoomMap.set(zoom, canvas);

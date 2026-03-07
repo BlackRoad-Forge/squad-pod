@@ -155,7 +155,7 @@ export default function App() {
         }}
       />
 
-      <AgentLabels officeState={getOfficeState()} zoom={editor.zoom} panRef={editor.panRef} />
+      <AgentLabels officeState={getOfficeState()} zoom={editor.zoom} panRef={editor.panRef} onAgentClick={handleDeskClick} />
 
       <BottomToolbar
         isEditMode={editor.isEditMode}
