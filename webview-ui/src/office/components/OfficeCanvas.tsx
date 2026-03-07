@@ -46,6 +46,7 @@ export function OfficeCanvas({
   const panOriginRef = useRef<{ x: number; y: number } | null>(null);
   const spaceKeyRef = useRef(false);
   const draggedFurnitureRef = useRef<{ uid: string; offsetCol: number; offsetRow: number } | null>(null);
+  const hasCenteredRef = useRef(false);
 
   const screenToWorld = useCallback(
     (screenX: number, screenY: number): { col: number; row: number } => {
@@ -105,6 +106,17 @@ export function OfficeCanvas({
         }
       },
       render: () => {
+        // One-time auto-center: when layout first loads (cols > 0),
+        // position the map in the center of the viewport.
+        if (!hasCenteredRef.current && officeState.layout.cols > 0 && containerRef.current) {
+          const r = containerRef.current.getBoundingClientRect();
+          const mapW = officeState.layout.cols * TILE_SIZE * zoom;
+          const mapH = officeState.layout.rows * TILE_SIZE * zoom;
+          panRef.current!.x = (r.width - mapW) / 2;
+          panRef.current!.y = (r.height - mapH) / 2;
+          hasCenteredRef.current = true;
+        }
+
         // Scale the context so all drawing coordinates are in CSS pixels.
         // Without this, DPR>1 displays render at wrong size/position.
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

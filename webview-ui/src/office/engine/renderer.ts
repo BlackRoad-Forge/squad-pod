@@ -439,8 +439,10 @@ export function renderFrame(
   const cols = layoutCols ?? tileMap[0]?.length ?? 0;
   const rows = layoutRows ?? tileMap.length ?? 0;
 
-  const offsetX = canvasWidth / 2 + panX * zoom;
-  const offsetY = canvasHeight / 2 + panY * zoom;
+  // panX/panY are screen-space offsets — same coordinate system as AgentLabels.
+  // No center offset: auto-centering is handled by initializing panRef.
+  const offsetX = panX;
+  const offsetY = panY;
 
   if (tileColors) {
     renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom, tileColors, cols);
