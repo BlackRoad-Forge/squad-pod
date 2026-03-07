@@ -152,6 +152,22 @@ export interface ExistingAgentsMessage {
   }>;
 }
 
+export interface SquadInfoData {
+  teamName: string | null;
+  description: string | null;
+  members: Array<{
+    name: string;
+    role: string;
+    status: string;
+    isActive: boolean;
+    currentTask: string | null;
+  }>;
+  hiddenMembers: Array<{ name: string; role: string; status: string }>;
+  projectContext: string | null;
+  totalAgents: number;
+  activeAgents: number;
+}
+
 export type OutboundMessage =
   | AgentCreatedMessage
   | AgentStatusMessage
@@ -168,5 +184,6 @@ export type OutboundMessage =
   | { type: 'furnitureLoaded'; furniture: FurnitureAsset[] }
   | { type: 'soundEnabled'; enabled: boolean }
   | { type: 'agentDetailLoaded'; detail: AgentDetailInfo }
+  | { type: 'squadInfoLoaded'; info: SquadInfoData }
   | { type: 'telemetryEvent'; event: TelemetryEvent }
   | { type: 'noWorkspace' };

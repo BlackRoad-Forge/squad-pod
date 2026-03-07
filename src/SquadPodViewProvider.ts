@@ -13,7 +13,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { LayoutData, WebviewMessage, OutboundMessage, AgentDetailInfo, TelemetryEvent } from './types.js';
+import type { LayoutData, WebviewMessage, OutboundMessage, AgentDetailInfo, TelemetryEvent, SquadInfoData } from './types.js';
 import {
   GLOBAL_KEY_SOUND_ENABLED,
   WORKSPACE_KEY_LAYOUT,
@@ -43,6 +43,12 @@ import {
   exportLayoutToFile,
   importLayoutFromFile,
 } from './layoutPersistence.js';
+import {
+  readTeamFile,
+  parseTeamName,
+  parseProjectContext,
+  parseAllMembers,
+} from './teamParser.js';
 
 export class SquadPodViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
@@ -373,25 +379,84 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
 
   private onOpenSquadInfo(): void {
     const workspaceRoot = this.getWorkspaceRoot();
-    if (!workspaceRoot) {return;}
+    if (!workspaceRoot) {
+      this.postMessage({
+        type: 'squadInfoLoaded',
+        info: {
+          teamName: null,
+          description: null,
+          members: [],
+          hiddenMembers: [],
+          projectContext: null,
+          totalAgents: 0,
+          activeAgents: 0,
+        },
+      });
+      return;
+    }
 
-    const teamFile = path.join(workspaceRoot, '.squad', 'team.md');
-    const uri = vscode.Uri.file(teamFile);
-    vscode.window.showTextDocument(uri, { preview: true }).then(
-      () => {},
-      () => {
-        // team.md doesn't exist — reveal the .squad directory
-        const squadDir = path.join(workspaceRoot, '.squad');
-        vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(squadDir)).then(
-          () => {},
-          () => {
-            vscode.window.showInformationMessage(
-              'No .squad/ directory found. Open a Squad-configured project to see team info.',
-            );
-          },
-        );
-      },
-    );
+    const content = readTeamFile(workspaceRoot);
+    const agents = getAgents();
+
+    if (!content) {
+      this.postMessage({
+        type: 'squadInfoLoaded',
+        info: {
+          teamName: null,
+          description: 'No .squad/team.md found. Open a Squad-configured project.',
+          members: [],
+          hiddenMembers: [],
+          projectContext: null,
+          totalAgents: agents.size,
+          activeAgents: [...agents.values()].filter(a => a.status === 'active').length,
+        },
+      });
+      return;
+    }
+
+    const teamName = parseTeamName(content);
+    const projectContext = parseProjectContext(content);
+    const allMembers = parseAllMembers(content);
+
+    const isHidden = (m: { role: string; status: string; name: string }) => {
+      const lr = m.role.toLowerCase();
+      const ls = m.status.toLowerCase();
+      const ln = m.name.toLowerCase();
+      return lr.includes('scribe') || ls.includes('silent') ||
+        (ln === 'ralph' && lr.includes('monitor'));
+    };
+
+    const visible = allMembers.filter(m => !isHidden(m));
+    const hidden = allMembers.filter(m => isHidden(m));
+
+    const members = visible.map(m => {
+      const agent = agents.get(m.slug);
+      return {
+        name: m.name,
+        role: m.role,
+        status: m.status,
+        isActive: agent?.status === 'active',
+        currentTask: agent?.currentTask ?? null,
+      };
+    });
+
+    const hiddenMembers = hidden.map(m => ({
+      name: m.name,
+      role: m.role,
+      status: m.status,
+    }));
+
+    const info: SquadInfoData = {
+      teamName,
+      description: projectContext,
+      members,
+      hiddenMembers,
+      projectContext,
+      totalAgents: agents.size,
+      activeAgents: [...agents.values()].filter(a => a.status === 'active').length,
+    };
+
+    this.postMessage({ type: 'squadInfoLoaded', info });
   }
 
   // ─── Default Layout Export (command) ──────────────────────────

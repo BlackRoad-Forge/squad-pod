@@ -8,6 +8,7 @@ import { BottomToolbar } from './components/BottomToolbar.js';
 import { ZoomControls } from './components/ZoomControls.js';
 import { DebugView } from './components/DebugView.js';
 import { AgentCard } from './components/AgentCard.js';
+import { SquadInfoCard } from './components/SquadInfoCard.js';
 import { TelemetryDrawer } from './components/TelemetryDrawer.js';
 import { EditorState } from './office/editor/editorState.js';
 import { useExtensionMessages } from './hooks/useExtensionMessages.js';
@@ -27,7 +28,7 @@ function getOfficeState(): OfficeState {
 export default function App() {
   const editor = useEditorActions(getOfficeState, editorState);
   const isEditDirty = useCallback(() => editor.isEditMode && editor.isDirty, [editor.isEditMode, editor.isDirty]);
-  const { agentTools, agentStatuses, layoutReady, noWorkspace, agentDetail, setAgentDetail, telemetryEvents, clearTelemetry } = useExtensionMessages(
+  const { agentTools, agentStatuses, layoutReady, noWorkspace, agentDetail, setAgentDetail, squadInfo, setSquadInfo, telemetryEvents, clearTelemetry } = useExtensionMessages(
     getOfficeState,
     editor.setLastSavedLayout,
     isEditDirty
@@ -58,6 +59,14 @@ export default function App() {
     setAgentDetail(null);
     setCardPosition(null);
   }, [setAgentDetail]);
+
+  const handleOpenSquadInfo = useCallback(() => {
+    vscode.postMessage({ type: 'openSquadInfo' });
+  }, []);
+
+  const handleCloseSquadInfo = useCallback(() => {
+    setSquadInfo(null);
+  }, [setSquadInfo]);
 
   const handleViewCharter = useCallback((agentId: string) => {
     vscode.postMessage({ type: 'openSquadAgent', agentId });
@@ -160,6 +169,7 @@ export default function App() {
       <BottomToolbar
         isEditMode={editor.isEditMode}
         onToggleEditMode={editor.handleToggleEditMode}
+        onOpenSquadInfo={handleOpenSquadInfo}
         isTelemetryOpen={isTelemetryOpen}
         onToggleTelemetry={handleToggleTelemetry}
         telemetryCount={telemetryEvents.length - telemetrySeenCount}
@@ -193,6 +203,11 @@ export default function App() {
         position={cardPosition}
         onClose={handleCloseCard}
         onViewCharter={handleViewCharter}
+      />
+
+      <SquadInfoCard
+        info={squadInfo}
+        onClose={handleCloseSquadInfo}
       />
     </div>
   );

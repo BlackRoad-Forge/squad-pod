@@ -3,6 +3,7 @@ import type { OfficeState } from '../office/engine/officeState.js';
 import type { OfficeLayout, ToolActivity, SquadTeamMember, TelemetryEvent } from '../office/types.js';
 import { vscode } from '../vscodeApi.js';
 import type { AgentDetailInfo } from '../components/AgentCard.js';
+import type { SquadInfoData } from '../components/SquadInfoCard.js';
 
 const MAX_TELEMETRY_EVENTS = 200;
 
@@ -16,6 +17,8 @@ export interface ExtensionMessageState {
   noWorkspace: boolean;
   agentDetail: AgentDetailInfo | null;
   setAgentDetail: React.Dispatch<React.SetStateAction<AgentDetailInfo | null>>;
+  squadInfo: SquadInfoData | null;
+  setSquadInfo: React.Dispatch<React.SetStateAction<SquadInfoData | null>>;
   telemetryEvents: TelemetryEvent[];
   clearTelemetry: () => void;
 }
@@ -39,6 +42,7 @@ export function useExtensionMessages(
   const [layoutReady, setLayoutReady] = useState(false);
   const [noWorkspace, setNoWorkspace] = useState(false);
   const [agentDetail, setAgentDetail] = useState<AgentDetailInfo | null>(null);
+  const [squadInfo, setSquadInfo] = useState<SquadInfoData | null>(null);
   const [telemetryEvents, setTelemetryEvents] = useState<TelemetryEvent[]>([]);
   const bufferedAgentsRef = useRef<AgentInfo[]>([]);
   const agentsRef = useRef<string[]>([]);
@@ -271,6 +275,11 @@ export function useExtensionMessages(
           break;
         }
 
+        case 'squadInfoLoaded': {
+          setSquadInfo(message.info);
+          break;
+        }
+
         case 'telemetryEvent': {
           const { event } = message;
           if (event) {
@@ -310,6 +319,8 @@ export function useExtensionMessages(
     noWorkspace,
     agentDetail,
     setAgentDetail,
+    squadInfo,
+    setSquadInfo,
     telemetryEvents,
     clearTelemetry,
   };
