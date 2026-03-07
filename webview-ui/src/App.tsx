@@ -27,7 +27,7 @@ function getOfficeState(): OfficeState {
 export default function App() {
   const editor = useEditorActions(getOfficeState, editorState);
   const isEditDirty = useCallback(() => editor.isEditMode && editor.isDirty, [editor.isEditMode, editor.isDirty]);
-  const { agentTools, agentStatuses, layoutReady, agentDetail, setAgentDetail, telemetryEvents, clearTelemetry } = useExtensionMessages(
+  const { agentTools, agentStatuses, layoutReady, noWorkspace, agentDetail, setAgentDetail, telemetryEvents, clearTelemetry } = useExtensionMessages(
     getOfficeState,
     editor.setLastSavedLayout,
     isEditDirty
@@ -91,6 +91,33 @@ export default function App() {
         }}
       >
         Loading office...
+      </div>
+    );
+  }
+
+  if (noWorkspace) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '16px',
+          padding: '24px',
+          background: 'var(--vscode-editor-background)',
+          color: 'var(--vscode-foreground)',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ fontSize: '18px', fontWeight: 500 }}>
+          Open a folder to get started
+        </div>
+        <div style={{ fontSize: '14px', opacity: 0.7, maxWidth: '400px' }}>
+          Squad Pod needs a workspace to discover your AI team. Open a folder with a Squad configuration to see your agents in action.
+        </div>
       </div>
     );
   }

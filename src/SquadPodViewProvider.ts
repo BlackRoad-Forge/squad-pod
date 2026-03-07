@@ -147,6 +147,7 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
 
     const workspaceRoot = this.getWorkspaceRoot();
     if (!workspaceRoot) {
+      this.postMessage({ type: 'noWorkspace' });
       return;
     }
 

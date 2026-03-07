@@ -174,4 +174,5 @@ export type OutboundMessage =
   | { type: 'furnitureLoaded'; furniture: FurnitureAsset[] }
   | { type: 'soundEnabled'; enabled: boolean }
   | { type: 'agentDetailLoaded'; detail: AgentDetailInfo }
-  | { type: 'telemetryEvent'; event: TelemetryEvent };
+  | { type: 'telemetryEvent'; event: TelemetryEvent }
+  | { type: 'noWorkspace' };

@@ -13,6 +13,7 @@ export interface ExtensionMessageState {
   agentStatuses: Record<string, string>;
   rosterMembers: SquadTeamMember[];
   layoutReady: boolean;
+  noWorkspace: boolean;
   agentDetail: AgentDetailInfo | null;
   setAgentDetail: React.Dispatch<React.SetStateAction<AgentDetailInfo | null>>;
   telemetryEvents: TelemetryEvent[];
@@ -36,6 +37,7 @@ export function useExtensionMessages(
   const [agentStatuses, setAgentStatuses] = useState<Record<string, string>>({});
   const [rosterMembers, setRosterMembers] = useState<SquadTeamMember[]>([]);
   const [layoutReady, setLayoutReady] = useState(false);
+  const [noWorkspace, setNoWorkspace] = useState(false);
   const [agentDetail, setAgentDetail] = useState<AgentDetailInfo | null>(null);
   const [telemetryEvents, setTelemetryEvents] = useState<TelemetryEvent[]>([]);
   const bufferedAgentsRef = useRef<AgentInfo[]>([]);
@@ -261,6 +263,12 @@ export function useExtensionMessages(
           break;
         }
 
+        case 'noWorkspace': {
+          setNoWorkspace(true);
+          setLayoutReady(true);
+          break;
+        }
+
         default:
           break;
       }
@@ -279,6 +287,7 @@ export function useExtensionMessages(
     agentStatuses,
     rosterMembers,
     layoutReady,
+    noWorkspace,
     agentDetail,
     setAgentDetail,
     telemetryEvents,
