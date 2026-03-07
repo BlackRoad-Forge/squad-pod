@@ -52,27 +52,35 @@ Established dual-build infrastructure (esbuild + Vite), TypeScript interfaces fo
 
 **Decision:** See `.squad/decisions.md` § 7 for full architectural rationale and pattern for future no-workspace-like conditions.
 
-### No-Workspace Handling (2026-03-07)
+### Missing Layout Assets — Graceful Degradation (2026-03-07)
 
-**Problem:** When no workspace folder is open in VS Code, Squad Pod webview gets stuck showing "Loading office..." forever because the extension host returns early from `onWebviewReady()` without sending any message, leaving the webview waiting indefinitely for `layoutLoaded`.
+**Problem:** When a workspace folder is open but ALL layout sources return null (no `.squad-pod/layout.json`, no workspace state, no bundled `dist/assets/layout.json`), the `layoutLoaded` message is never sent, causing the webview to get stuck on "Loading office..." indefinitely.
 
-**Architecture Decisions:**
-- Added `noWorkspace` to `OutboundMessage` discriminated union in `src/types.ts`
-- Extension host now explicitly sends `{ type: 'noWorkspace' }` when `getWorkspaceRoot()` returns undefined in `onWebviewReady()`
-- Webview hook `useExtensionMessages` handles `noWorkspace` by setting both `noWorkspace: true` and `layoutReady: true` (so loading screen exits)
-- `App.tsx` shows a helpful message when `noWorkspace` is true instead of hanging on loading screen
+**Root Cause:** The `loadAndSendLayout()` method in `SquadPodViewProvider.ts` had a conditional guard `if (layout)` before sending the message. When all three fallbacks failed, the function would return early without communicating to the webview.
+
+**Solution:**
+- Added `createMinimalLayout()` helper function that creates an empty but valid `LayoutData` structure
+- Modified `loadAndSendLayout()` to ALWAYS send `layoutLoaded` message, even when no layout exists
+- Removed conditional guard — message is now sent unconditionally with either a real layout or a minimal fallback
+
+**Minimal Layout Structure:**
+```typescript
+{
+  version: 1,
+  rooms: [{ id: 'main-room', x: 0, y: 0, width: 20, height: 15, wallType: 'default', floorType: 0 }],
+  furniture: [],
+  seats: []
+}
+```
 
 **Key File Changes:**
-- `src/types.ts` — Added `{ type: 'noWorkspace' }` to `OutboundMessage` union
-- `src/SquadPodViewProvider.ts` — `onWebviewReady()` sends `noWorkspace` message before returning when no workspace is open
-- `webview-ui/src/hooks/useExtensionMessages.ts` — Added `noWorkspace` state, handles `noWorkspace` message case
-- `webview-ui/src/App.tsx` — Added conditional render for `noWorkspace` state with helpful guidance message
+- `src/SquadPodViewProvider.ts` — `loadAndSendLayout()` always sends message; added `createMinimalLayout()` as last fallback
 
 **User Experience:**
-- Before: Extension opens, shows "Loading office..." indefinitely when no folder open
-- After: Extension opens, shows clear message: "Open a folder to get started. Squad Pod needs a workspace to discover your AI team."
+- Before: Extension hangs on "Loading office..." when no layout assets exist
+- After: Extension renders an empty 20×15 office when no layout exists; users can populate via layout editor
 
-**Pattern:** Discriminated union on message `type` field ensures type-safe exhaustive handling across extension-webview boundary. Always send a message when a condition changes, never silently return early.
+**Pattern:** Request-response contract must always be fulfilled. If the webview expects a message, send it even when the result is a fallback/empty state.
 
-**Decision:** See `.squad/decisions.md` § 7 for full architectural rationale and pattern for future no-workspace-like conditions.
+**Decision:** See `.squad/decisions/inbox/lisa-simpson-layout-fallback.md` for architectural rationale.
 

@@ -251,9 +251,13 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
       layout = loadDefaultLayout(this.context.extensionPath);
     }
 
-    if (layout) {
-      this.postMessage({ type: 'layoutLoaded', layout });
+    // Last resort: create minimal empty layout
+    if (!layout) {
+      layout = createMinimalLayout();
     }
+
+    // Always send layoutLoaded message
+    this.postMessage({ type: 'layoutLoaded', layout });
   }
 
   private onSaveLayout(layout: LayoutData | undefined): void {
@@ -474,6 +478,29 @@ function getNonce(): string {
     nonce += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return nonce;
+}
+
+/**
+ * Create a minimal empty layout when no layout source is available.
+ * This ensures the webview can always render, even without assets.
+ */
+function createMinimalLayout(): LayoutData {
+  return {
+    version: 1,
+    rooms: [
+      {
+        id: 'main-room',
+        x: 0,
+        y: 0,
+        width: 20,
+        height: 15,
+        wallType: 'default',
+        floorType: 0,
+      },
+    ],
+    furniture: [],
+    seats: [],
+  };
 }
 
 function getAgentDetail(workspaceRoot: string, agentId: string): AgentDetailInfo | null {
