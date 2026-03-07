@@ -133,6 +133,10 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
         this.onRequestAgentDetail(message.agentId as string | undefined);
         break;
 
+      case 'openSquadInfo':
+        this.onOpenSquadInfo();
+        break;
+
       default:
         // Unknown message — ignore
         break;
@@ -365,6 +369,29 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
     if (detail) {
       this.postMessage({ type: 'agentDetailLoaded', detail });
     }
+  }
+
+  private onOpenSquadInfo(): void {
+    const workspaceRoot = this.getWorkspaceRoot();
+    if (!workspaceRoot) {return;}
+
+    const teamFile = path.join(workspaceRoot, '.squad', 'team.md');
+    const uri = vscode.Uri.file(teamFile);
+    vscode.window.showTextDocument(uri, { preview: true }).then(
+      () => {},
+      () => {
+        // team.md doesn't exist — reveal the .squad directory
+        const squadDir = path.join(workspaceRoot, '.squad');
+        vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(squadDir)).then(
+          () => {},
+          () => {
+            vscode.window.showInformationMessage(
+              'No .squad/ directory found. Open a Squad-configured project to see team info.',
+            );
+          },
+        );
+      },
+    );
   }
 
   // ─── Default Layout Export (command) ──────────────────────────
