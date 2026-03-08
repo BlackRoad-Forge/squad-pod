@@ -280,6 +280,16 @@ export function useExtensionMessages(
           break;
         }
 
+        case 'tilesetMetadataLoaded': {
+          const { metadata, tilesetPngUri } = message;
+          if (metadata && tilesetPngUri) {
+            import('../office/sprites/assetLoader.js').then(({ setTilesetMetadata }) => {
+              setTilesetMetadata(metadata, tilesetPngUri);
+            });
+          }
+          break;
+        }
+
         case 'agentDetailLoaded': {
           const { detail } = message;
           setAgentDetail(detail);

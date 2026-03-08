@@ -5,9 +5,15 @@
  * (background removal for characters), and provides them to renderers.
  * Falls back gracefully if assets can't be loaded — existing inline
  * sprite rendering continues to work.
+ *
+ * Supports two metadata formats:
+ *   - tileset-metadata.json (rich: typed items with bounds + interactables)
+ *   - tileset.json (legacy: simple name→region object map)
  */
 
 import { TILE_SIZE } from '../types.js';
+
+// ── Types — legacy tileset.json format ────────────────────────────
 
 export interface TilesetObjectDef {
   x: number;
@@ -20,6 +26,36 @@ export interface TilesetData {
   image: HTMLImageElement;
   objects: Record<string, TilesetObjectDef>;
   tileSize: number;
+}
+
+// ── Types — rich tileset-metadata.json format ─────────────────────
+
+export type ItemType = 'floor' | 'wall' | 'furniture' | 'electronics' | 'appliance' | 'decoration';
+
+export interface ItemBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface TilesetItem {
+  id: string;
+  type: ItemType;
+  bounds: ItemBounds;
+}
+
+export interface TilesetInteractable {
+  item_id: string;
+  action: string;
+}
+
+export interface TilesetMetadata {
+  tileset_name: string;
+  tile_size: number;
+  asset_source: string;
+  items: TilesetItem[];
+  interactables: TilesetInteractable[];
 }
 
 export interface CharacterSheetData {
@@ -49,6 +85,14 @@ let loadingPromise: Promise<void> | null = null;
 let assetsReady = false;
 let assetBaseUrl = '';
 
+// ── Rich metadata state ──────────────────────────────────────────
+
+let tilesetMetadata: TilesetMetadata | null = null;
+let tilesetMetadataImage: HTMLImageElement | null = null;
+const itemById = new Map<string, TilesetItem>();
+const itemsByType = new Map<ItemType, TilesetItem[]>();
+let interactables: TilesetInteractable[] = [];
+
 // ── Public accessors ──────────────────────────────────────────────
 
 export function areAssetsReady(): boolean {
@@ -66,6 +110,83 @@ export function getCharacterSheet(key: string): CharacterSheetData | null {
 /** Set the base URL for assets (e.g. from extension webview URI). */
 export function setAssetBaseUrl(url: string): void {
   assetBaseUrl = url.endsWith('/') ? url : url + '/';
+}
+
+// ── Rich metadata accessors ──────────────────────────────────────
+
+/** Returns the loaded TilesetMetadata, or null if only legacy data is available. */
+export function getTilesetMetadata(): TilesetMetadata | null {
+  return tilesetMetadata;
+}
+
+/** Returns the tileset PNG image loaded for the rich metadata path. */
+export function getTilesetMetadataImage(): HTMLImageElement | null {
+  return tilesetMetadataImage;
+}
+
+/** Look up a single tileset item by its unique id (e.g. "desk_work_monitor"). */
+export function getItemById(id: string): TilesetItem | undefined {
+  return itemById.get(id);
+}
+
+/** Get all tileset items of a given type category (e.g. "furniture", "appliance"). */
+export function getItemsByType(type: ItemType): TilesetItem[] {
+  return itemsByType.get(type) ?? [];
+}
+
+/** Get the interactables list — items that support player interaction. */
+export function getInteractables(): TilesetInteractable[] {
+  return interactables;
+}
+
+/**
+ * Ingest rich tileset metadata sent by the extension host via
+ * `tilesetMetadataLoaded`.  Builds the id and type lookup indexes,
+ * then loads the tileset PNG image in the browser.
+ */
+export function setTilesetMetadata(metadata: TilesetMetadata, tilesetPngUri: string): void {
+  tilesetMetadata = metadata;
+  interactables = metadata.interactables ?? [];
+
+  // Build lookup indexes
+  itemById.clear();
+  itemsByType.clear();
+  for (const item of metadata.items) {
+    itemById.set(item.id, item);
+    const bucket = itemsByType.get(item.type);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      itemsByType.set(item.type, [item]);
+    }
+  }
+
+  // Load the tileset PNG image for rendering
+  const img = new Image();
+  img.onload = () => {
+    tilesetMetadataImage = img;
+
+    // Also populate legacy tilesetData for backward compat with renderers
+    // that still use getTilesetData()
+    const legacyObjects: Record<string, TilesetObjectDef> = {};
+    for (const item of metadata.items) {
+      legacyObjects[item.id] = {
+        x: item.bounds.x,
+        y: item.bounds.y,
+        w: item.bounds.width,
+        h: item.bounds.height,
+      };
+    }
+    tilesetData = {
+      image: img,
+      objects: legacyObjects,
+      tileSize: metadata.tile_size ?? TILE_SIZE,
+    };
+  };
+  img.onerror = () => {
+    console.warn('[assetLoader] Failed to load tileset PNG for metadata:', tilesetPngUri);
+  };
+  img.src = tilesetPngUri;
 }
 
 // ── Internals ─────────────────────────────────────────────────────

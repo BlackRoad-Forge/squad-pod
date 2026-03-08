@@ -123,6 +123,44 @@ export interface CharacterAssetEntry {
   uri: string;  // webview-safe URI string (from webview.asWebviewUri)
 }
 
+// ─── Tileset Metadata (rich format from tileset-metadata.json) ───────
+
+/** Category for a tileset item — determines rendering layer and interaction rules. */
+export type ItemType = 'floor' | 'wall' | 'furniture' | 'electronics' | 'appliance' | 'decoration';
+
+/** Pixel-coordinate bounding box within the tileset PNG. */
+export interface ItemBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** A single item in the tileset — identified by id, categorized by type. */
+export interface TilesetItem {
+  id: string;
+  type: ItemType;
+  bounds: ItemBounds;
+}
+
+/** Maps an interactive tileset item to the action it triggers. */
+export interface TilesetInteractable {
+  item_id: string;
+  action: string;
+}
+
+/**
+ * Full tileset metadata — the richer successor to TilesetData.
+ * 18 categorized items with precise bounds plus an interactables table.
+ */
+export interface TilesetMetadata {
+  tileset_name: string;
+  tile_size: number;
+  asset_source: string;
+  items: TilesetItem[];
+  interactables: TilesetInteractable[];
+}
+
 // ─── Telemetry ──────────────────────────────────────────────────────
 
 export type TelemetryCategory = 'status' | 'session' | 'log' | 'orchestration';
@@ -217,5 +255,6 @@ export type OutboundMessage =
   | { type: 'squadInfoLoaded'; info: SquadInfoData }
   | { type: 'telemetryEvent'; event: TelemetryEvent }
   | { type: 'tilesetAssetsLoaded'; tilesetPngUri: string; tilesetData: TilesetData }
+  | { type: 'tilesetMetadataLoaded'; tilesetPngUri: string; metadata: TilesetMetadata }
   | { type: 'characterAssetsLoaded'; characters: CharacterAssetEntry[] }
   | { type: 'noWorkspace' };

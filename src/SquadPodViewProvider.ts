@@ -13,7 +13,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { LayoutData, WebviewMessage, OutboundMessage, AgentDetailInfo, TelemetryEvent, SquadInfoData, TilesetData, CharacterAssetEntry } from './types.js';
+import type { LayoutData, WebviewMessage, OutboundMessage, AgentDetailInfo, TelemetryEvent, SquadInfoData, TilesetData, TilesetMetadata, CharacterAssetEntry } from './types.js';
 import {
   CUSTOM_CHAR_SPRITE_PREFIX,
   GLOBAL_KEY_SOUND_ENABLED,
@@ -266,26 +266,30 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
 
     const assetsDir = path.join(this.context.extensionPath, 'dist', 'assets');
 
-    // ── Tileset (office furniture spritesheet + JSON coordinate map) ──
+    // ── Tileset metadata (rich format) with legacy fallback ──────────
     const tilesetPngPath = path.join(assetsDir, 'tileset_office.png');
-    const tilesetJsonPath = path.join(assetsDir, 'tileset.json');
+    const metadataJsonPath = path.join(assetsDir, 'tileset-metadata.json');
+    const legacyJsonPath = path.join(assetsDir, 'tileset.json');
 
-    if (fs.existsSync(tilesetPngPath) && fs.existsSync(tilesetJsonPath)) {
-      try {
-        const tilesetData: TilesetData = JSON.parse(
-          fs.readFileSync(tilesetJsonPath, 'utf-8'),
-        );
-        const tilesetPngUri = webview
-          .asWebviewUri(vscode.Uri.file(tilesetPngPath))
-          .toString();
+    if (fs.existsSync(tilesetPngPath)) {
+      const tilesetPngUri = webview
+        .asWebviewUri(vscode.Uri.file(tilesetPngPath))
+        .toString();
 
-        this.postMessage({
-          type: 'tilesetAssetsLoaded',
-          tilesetPngUri,
-          tilesetData,
-        });
-      } catch {
-        // tileset.json malformed or unreadable — skip
+      // Prefer tileset-metadata.json (richer: typed items, interactables)
+      if (fs.existsSync(metadataJsonPath)) {
+        try {
+          const metadata: TilesetMetadata = JSON.parse(
+            fs.readFileSync(metadataJsonPath, 'utf-8'),
+          );
+          this.postMessage({ type: 'tilesetMetadataLoaded', tilesetPngUri, metadata });
+        } catch {
+          // metadata JSON malformed — try legacy fallback
+          this.sendLegacyTilesetData(legacyJsonPath, tilesetPngUri);
+        }
+      } else {
+        // No metadata file — fall back to legacy tileset.json
+        this.sendLegacyTilesetData(legacyJsonPath, tilesetPngUri);
       }
     }
 
@@ -306,6 +310,19 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
 
         this.postMessage({ type: 'characterAssetsLoaded', characters });
       }
+    }
+  }
+
+  /** Send legacy tilesetAssetsLoaded message from tileset.json (backward compat). */
+  private sendLegacyTilesetData(jsonPath: string, tilesetPngUri: string): void {
+    if (!fs.existsSync(jsonPath)) { return; }
+    try {
+      const tilesetData: TilesetData = JSON.parse(
+        fs.readFileSync(jsonPath, 'utf-8'),
+      );
+      this.postMessage({ type: 'tilesetAssetsLoaded', tilesetPngUri, tilesetData });
+    } catch {
+      // legacy tileset.json malformed — skip silently
     }
   }
 
