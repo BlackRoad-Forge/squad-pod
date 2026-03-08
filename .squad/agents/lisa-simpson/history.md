@@ -193,3 +193,22 @@ Established dual-build infrastructure (esbuild + Vite), TypeScript interfaces fo
 
 **Test Results:** All 46 tests pass, build clean.
 
+
+### Tileset Asset Pipeline — assetsReady Gate Bug (2026-03-08)
+
+**Task:** Diagnose and fix custom tileset assets (tileset.json, tileset-metadata.json, tileset_office.png) not loading — webview always fell back to default inline sprites.
+
+**Root Cause — Two bugs:**
+
+1. **`assetsReady` never set to `true`:** `setTilesetMetadata()` in `assetLoader.ts` loaded the tileset PNG and built metadata indexes, but never flipped the `assetsReady` flag. The renderer gates ALL PNG rendering behind `areAssetsReady()`, so it always fell back to inline sprites.
+
+2. **Object name mismatch between metadata and legacy paths:** The extension sent EITHER `tilesetMetadataLoaded` (metadata item IDs like `desk_work_monitor`) OR `tilesetAssetsLoaded` (tileset.json names like `work_desk_v1`), never both. The renderer's `furnitureToTileset` mapping uses tileset.json names.
+
+**Fix:**
+- `assetLoader.ts`: `setTilesetMetadata()` now sets `assetsReady = true` in `img.onload`. New `setLegacyTilesetAssets()` function populates `tilesetData` with correct tileset.json names.
+- `useExtensionMessages.ts`: Added `tilesetAssetsLoaded` handler
+- `SquadPodViewProvider.ts`: Now always sends BOTH metadata + legacy messages
+
+**Key Pattern:** When two data formats exist for the same asset, send both. The `assetsReady` flag must be set by ALL ingestion paths.
+
+**Test Results:** All 124 tests pass, both builds clean.

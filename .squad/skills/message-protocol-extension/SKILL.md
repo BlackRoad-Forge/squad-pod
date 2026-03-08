@@ -23,6 +23,14 @@ When a new message type supersedes an old one (e.g., `tilesetMetadataLoaded` sup
 - On the webview side, have the new handler also populate legacy data structures so existing consumers keep working
 - Never remove the old message case until all consumers are migrated
 
+## Pattern: Dual-Format Asset Messages
+
+When two data formats describe the same asset (rich metadata vs legacy), send BOTH messages from the extension when both source files exist. Each populates its own data structure on the webview side. This avoids cross-mapping name mismatches (e.g., metadata item IDs differ from legacy object names).
+
+## Gotcha: Asset Ready Gates
+
+If the webview uses a shared boolean gate (e.g., `assetsReady`) to enable a rendering path, EVERY ingestion function that loads assets must set the gate to `true`. Otherwise the renderer will silently skip the PNG path even when assets are loaded. Search for all callers of the gate-check function to verify.
+
 ## Key Files
 
 - `src/types.ts` — discriminated union lives here
