@@ -52,9 +52,11 @@
     "lint": "eslint src",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:all": "vitest run && cd webview-ui && npx vitest run"
+    "test:all": "vitest run && cd webview-ui && npx vitest run",
+    "import-tileset": "tsx scripts/0-import-tileset.ts"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@types/node": "22.x",
     "@types/pngjs": "^6.0.5",
     "@types/vscode": "^1.107.0",
