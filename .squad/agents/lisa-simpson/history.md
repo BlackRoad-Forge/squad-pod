@@ -543,3 +543,27 @@ Conducted end-to-end audit of sprite and tileset rendering pipeline after user r
 
 **Commit:** 74715a4
 **Status:** ✅ COMPLETED
+
+### Character Sprite Sheet Replacement — 2 Source Images (2026-03-08)
+
+**Task:** Replace all 5 character sprite sheets (A-E) with 2 new source images provided by Brian.
+
+**Source Analysis:**
+- Image A (1525x1280, RGB): 5 cols x 4 rows grid where columns=directions (DOWN/RIGHT/UP/LEFT/DOWN-alt), rows=walk frames. Background ~(243,243,243).
+- Image B (2331x1536, RGB): 7 cols x 4 rows grid with content at columns 0,2,4,6. Rows already in UP/RIGHT/DOWN/LEFT order. Background ~(98-140) noisy gray.
+
+**Processing Pipeline:**
+1. Background removed via scipy 
+dimage.label connected-component flood-fill from image edges. Gray threshold tuned per-image (195 for A, 70-155 for B).
+2. Small noise clusters (<40-50 px) removed. Light gray artifacts cleaned in second pass.
+3. For image A UP-facing direction: gray clothing was indistinguishable from gray background. Used mirrored DOWN frames — standard game dev technique at 32x32 scale.
+4. Frames padded from 4-5 source frames to 7 via mirror-cycle ([0,1,2,3,2,1,0] or [0,1,2,3,4,3,2]).
+5. NEAREST neighbor resampling to 32x32 per frame, assembled into 224x128 RGBA sheets.
+
+**Code Changes:**
+- CHAR_COUNT: 6 → 2 (src/constants.ts)
+- PALETTE_TO_SHEET: ['A','B','C','D','E','A'] → ['A','B'] (characterSheetRenderer.ts)
+- charKeys: ['A','B','C','D','E'] → ['A','B'] (assetLoader.ts)
+- Deleted char_employeeC/D/E.png
+
+**Key Insight:** When source sprite art has gray-on-gray (clothing vs background), threshold-based separation fails. The flood-fill connected-component approach works well when character colors differ from background, but for near-identical tones, mirroring from another direction is the pragmatic solution.
