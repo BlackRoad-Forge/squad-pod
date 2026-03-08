@@ -463,3 +463,27 @@ Ported four self-contained HTML browser tools from pablodelucca/pixel-agents int
 - ✅ Vite build succeeds (283KB bundle)
 - ✅ TypeScript strict mode: zero errors
 - ✅ No changes to extension host code (src/)
+
+### Tileset Metadata Integration — Collision & Interactables (2026-07-25)
+
+**Task:** Integrated tileset-metadata.json (18 items, 3 interactables) into the Canvas rendering pipeline with collision and interactable support.
+
+**Files Modified:**
+- `webview-ui/src/office/sprites/tilesetRenderer.ts` — Added metadata-driven rendering: `drawMetadataItem()` for native-size rendering by item ID using precise pixel bounds from tileset-metadata.json, `drawMetadataItemScaled()` for scaled rendering to fit layout footprints, `getItemGridSize()` for multi-tile grid calculation, `isGridAligned()` for validation. Legacy `drawTilesetFurniture()` and `drawTilesetObjectNative()` preserved untouched for backward compat.
+
+**Files Created:**
+- `webview-ui/src/office/engine/collision.ts` — Metadata-aware collision layer. `isBlockingType()` classifies item types (furniture/electronics/appliance/wall → blocked; floor/decoration → walkable). `getItemOccupiedCells()` calculates grid cells from pixel bounds for multi-tile items (e.g., desk_work_monitor at 48×32 = 3×2 tiles). `getMetadataBlockedTiles()` builds blocked tile set from placed items. `mergeBlockedTiles()` combines with existing layout blocked tiles. `wouldOverlap()` checks placement validity.
+- `webview-ui/src/office/engine/interactables.ts` — Interactable registry and spatial queries. `InteractableRegistry` class loads from tileset metadata, maps item_id→action (vending_machine_soda→dispense_drink, coffee_maker_carafe→brew_coffee, pc_monitor_on→use_computer). `getInteractionPoints()` finds adjacent walkable cells for character interaction. `isAdjacentToInteractable()` / `findNearbyInteractables()` for proximity checks. `findClosestInteractionPoint()` for routing characters to nearest interaction.
+
+**Key Design Decisions:**
+- Metadata rendering uses `getItemById()` + `getTilesetMetadataImage()` from Lisa's assetLoader updates — clean separation of loading (assetLoader) vs rendering (tilesetRenderer)
+- Collision types are a const ReadonlySet for O(1) lookups, not if/else chains
+- Multi-tile collision uses `Math.ceil(bounds / TILE_SIZE)` so 48×32 items correctly block 3×2 grid cells
+- InteractableRegistry is a class (stateful) vs collision functions (stateless) because interactables need load/query lifecycle
+- All new code is tree-shakeable — only imported modules get bundled
+
+**Build Verification:**
+- ✅ 78 webview tests pass (vitest, no regressions)
+- ✅ Vite build succeeds (284KB bundle)
+- ✅ TypeScript strict mode: zero errors
+- ✅ No changes to extension host code (src/)

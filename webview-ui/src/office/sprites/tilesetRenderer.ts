@@ -1,19 +1,26 @@
 /**
  * Tileset Renderer
  *
- * Draws furniture objects from the PNG tileset sprite sheet using
- * `ctx.drawImage()` source-rectangle clipping.  Falls back silently
- * when the tileset isn't loaded yet.
+ * Draws furniture/tileset items from the PNG tileset sprite sheet using
+ * `ctx.drawImage()` source-rectangle clipping.
+ *
+ * Supports two paths:
+ *   1. Metadata-driven — uses tileset-metadata.json item bounds (preferred)
+ *   2. Legacy — uses tileset.json object map via FurnitureType mapping
+ *
+ * Falls back silently when the tileset isn't loaded yet.
  */
 
-import { getTilesetData } from './assetLoader.js';
-import { FurnitureType } from '../types.js';
+import {
+  getTilesetData,
+  getTilesetMetadataImage,
+  getItemById,
+} from './assetLoader.js';
+import type { TilesetItem } from './assetLoader.js';
+import { FurnitureType, TILE_SIZE } from '../types.js';
 
-/**
- * Mapping from the game's FurnitureType values to tileset.json object
- * names.  Only types with a tileset equivalent are listed; others fall
- * back to inline sprite rendering.
- */
+// ── Legacy FurnitureType → tileset.json name mapping ──────────────
+
 const furnitureToTileset: Record<string, string> = {
   [FurnitureType.DESK]: 'work_desk_v1',
   [FurnitureType.BOOKSHELF]: 'bookshelf_full',
@@ -23,11 +30,100 @@ const furnitureToTileset: Record<string, string> = {
   [FurnitureType.PC]: 'computer_monitor',
 };
 
+// ── Metadata-driven rendering ─────────────────────────────────────
+
 /**
- * Try to draw a furniture item from the PNG tileset.
+ * Draw a tileset item by its metadata id (e.g. "desk_work_monitor").
+ * Uses the item's precise pixel bounds from tileset-metadata.json.
+ * Multi-tile items (bounds wider/taller than TILE_SIZE) render
+ * correctly spanning the full destination area.
  *
- * @returns `true` if the tileset object was drawn, `false` if the
- *          caller should fall back to inline sprite rendering.
+ * @returns `true` if drawn, `false` if metadata or image not available.
+ */
+export function drawMetadataItem(
+  ctx: CanvasRenderingContext2D,
+  itemId: string,
+  destX: number,
+  destY: number,
+  zoom: number,
+): boolean {
+  const image = getTilesetMetadataImage();
+  if (!image) return false;
+
+  const item = getItemById(itemId);
+  if (!item) return false;
+
+  ctx.imageSmoothingEnabled = false;
+  const { x, y, width, height } = item.bounds;
+  ctx.drawImage(
+    image,
+    x, y, width, height,
+    destX, destY, width * zoom, height * zoom,
+  );
+  return true;
+}
+
+/**
+ * Draw a tileset item scaled to fit a specific destination rectangle.
+ * Useful when the layout dictates the footprint size.
+ */
+export function drawMetadataItemScaled(
+  ctx: CanvasRenderingContext2D,
+  itemId: string,
+  destX: number,
+  destY: number,
+  destW: number,
+  destH: number,
+): boolean {
+  const image = getTilesetMetadataImage();
+  if (!image) return false;
+
+  const item = getItemById(itemId);
+  if (!item) return false;
+
+  ctx.imageSmoothingEnabled = false;
+  const { x, y, width, height } = item.bounds;
+  ctx.drawImage(
+    image,
+    x, y, width, height,
+    destX, destY, destW, destH,
+  );
+  return true;
+}
+
+/**
+ * Calculate how many grid tiles an item occupies based on its
+ * pixel bounds and TILE_SIZE.  Always rounds up so partial tiles
+ * are included in the footprint.
+ */
+export function getItemGridSize(item: TilesetItem): { cols: number; rows: number } {
+  return {
+    cols: Math.ceil(item.bounds.width / TILE_SIZE),
+    rows: Math.ceil(item.bounds.height / TILE_SIZE),
+  };
+}
+
+/**
+ * Validate that an item's bounds are grid-aligned (origin and
+ * dimensions are multiples of TILE_SIZE, or at least the placement
+ * col/row snaps to the grid).  Returns true if the item's pixel
+ * dimensions are clean multiples of TILE_SIZE.
+ */
+export function isGridAligned(item: TilesetItem): boolean {
+  return (
+    item.bounds.width % TILE_SIZE === 0 &&
+    item.bounds.height % TILE_SIZE === 0
+  );
+}
+
+// ── Legacy rendering (backward compat) ────────────────────────────
+
+/**
+ * Try to draw a furniture item from the PNG tileset using the legacy
+ * FurnitureType → tileset.json object mapping.
+ *
+ * @returns `true` if drawn, `false` if the caller should fall back
+ *          to inline sprite rendering.
  */
 export function drawTilesetFurniture(
   ctx: CanvasRenderingContext2D,
@@ -47,15 +143,11 @@ export function drawTilesetFurniture(
   if (!obj) return false;
 
   ctx.imageSmoothingEnabled = false;
-
-  // Scale the tileset object to fill the furniture instance's footprint
-  // so it matches the existing layout dimensions.
   ctx.drawImage(
     tileset.image,
-    obj.x, obj.y, obj.w, obj.h,    // source rect in tileset
-    destX, destY, destW, destH,     // dest rect on canvas
+    obj.x, obj.y, obj.w, obj.h,
+    destX, destY, destW, destH,
   );
-
   return true;
 }
 
@@ -82,6 +174,5 @@ export function drawTilesetObjectNative(
     obj.x, obj.y, obj.w, obj.h,
     destX, destY, obj.w * zoom, obj.h * zoom,
   );
-
   return true;
 }
