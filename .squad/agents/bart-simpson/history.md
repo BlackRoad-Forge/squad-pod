@@ -566,3 +566,17 @@ Fixed two blocking bugs in the layout editor, reported from test session:
 **Test Results:** All 124 tests pass, build clean.
 
 **Status:** ✅ COMPLETED (commit 8698533)
+
+## 2026-03-08T05:21:51Z — Cross-Learning: Lisa's Vite Code-Splitting Discovery
+
+Lisa completed a full end-to-end pipeline audit and identified the root cause of sprite/tileset rendering failures: **Vite code-splitting fragmented module instances.**
+
+The problem: All 8 message handlers in useExtensionMessages.ts used dynamic import() calls. Vite code-split these into separate chunks, each with isolated module state. Meanwhile, renderer.ts statically imported the same modules. Result: assets written to chunk instances; renderer read from main bundle instances. Two copies of each module existed — readers and writers accessing different copies.
+
+Why tests passed: Vitest runs all imports statically in the same module graph, so no code-splitting occurs.
+
+**Key Learning for All Agents:** NEVER use dynamic import() in Vite webview code for modules that share mutable state. Code-splitting creates isolated instances. Always use static imports at file top for state-sharing modules.
+
+**Decision §17 Captured:** No dynamic import() for state-sharing modules in webview.
+
+**Commit:** 74715a4

@@ -771,3 +771,31 @@ When a new sprite sheet has non-standard dimensions, **recompose it to 3220×128
 - New character sheets must be preprocessed to 3220×1280 before adding to \webview-ui/public/assets/characters/\
 - The preprocessing recipe: divide source into N strips, center each in a 460px cell, fill remaining frames with background
 - If future sheets require >7 frames, the pipeline will need refactoring (but 7 frames exceeds the animation's max index of 3)
+
+### 17. No Dynamic import() for State-Sharing Modules in Webview
+
+**Author:** Lisa Simpson  
+**Date:** 2026-03-08  
+**Status:** Accepted  
+**Commit:** 74715a4
+
+#### Context
+
+The webview (`webview-ui/`) is bundled by Vite. When source code uses dynamic `import()` to lazily load a module, Vite may code-split it into a separate chunk file. If the same module is ALSO statically imported elsewhere in the bundle, two separate instances of the module's state can exist — the chunk's copy and the main bundle's copy.
+
+#### Problem
+
+All 8 message handlers in `useExtensionMessages.ts` used dynamic `import()` to call state-setter functions (e.g., `setTilesetMetadata`, `setFloorSprites`, `loadCharacterSheetsFromUris`). These wrote to module-level variables in code-split chunk copies. But `renderer.ts` read from the main bundle's copies via static imports. Result: assets loaded into one copy, renderer read from another — rendering always fell back to colored rectangles.
+
+#### Decision
+
+**NEVER use dynamic `import()` in webview code for modules that share mutable state with the renderer or other statically-imported consumers.** Use static `import` at the top of the file instead.
+
+Dynamic `import()` is acceptable ONLY for:
+- Truly lazy-loaded UI components with no shared mutable state
+- Modules that are self-contained and don't communicate via module-level variables
+
+#### Enforcement
+
+- `vite.config.ts` uses `emptyOutDir: true` to prevent stale chunks from lingering
+- If a new code-split chunk appears in `dist/webview/assets/` after a build, investigate whether it duplicates module state

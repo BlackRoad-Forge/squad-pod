@@ -407,3 +407,75 @@ Completed integration of char_employeeE sprite sheet as background task via Copi
 **Status:** ✅ COMPLETED (2026-03-08T05:05)
 
 **Commit:** 5e6c42f — Remove CSP-blocked fetch() from webview asset loader
+
+### Dynamic Import Code-Splitting — Module Instance Isolation Bug (2026-03-08)
+
+**Problem:** After ALL previous asset pipeline fixes (URIs, message handlers, assetsReady flag, race condition), the user pressed F5 multiple times and STILL saw: colored rectangles for characters, beige/tan grid for floors, gray rectangles for furniture. All 124 tests passed. Both builds succeeded.
+
+**Root Cause — Vite code-splitting creates isolated module instances:**
+
+The `useExtensionMessages.ts` message handlers used dynamic `import()` calls:
+```typescript
+case 'tilesetMetadataLoaded':
+  import('../office/sprites/assetLoader.js').then(({ setTilesetMetadata }) => {
+    setTilesetMetadata(metadata, tilesetPngUri);
+  });
+```
+
+Vite compiled these dynamic imports into code-split chunks. Evidence: `dist/webview/assets/wallTiles.js` contained only `function e(t){}export{e as setWallSprites};` — a no-op stub. The REAL `setWallSprites` (with its module-level `floorSprites` array) was in the main `index.js` bundle (pulled in by static imports in `renderer.ts`).
+
+When the message handler called `setTilesetMetadata()` on the chunk's module instance, it set `tilesetMetadataImage` and `assetsReady = true` on the CHUNK'S copy. But `renderer.ts` imported `areAssetsReady()` and `getTilesetMetadataImage()` from the MAIN BUNDLE'S copy — which was still null/false.
+
+**Why tests passed:** Tests import everything statically from the same module graph — no code-splitting involved in the test runner (Vitest uses its own module resolution).
+
+**Fix:**
+1. `useExtensionMessages.ts` — Converted ALL 8 dynamic `import()` calls to static `import` statements at file top. This guarantees a single module instance shared between message handlers and renderers.
+2. `assetLoader.ts` — Added try/catch around `removeBackground()` in character sheet onload (5MB PNG processing could throw on memory-constrained webviews)
+3. `SquadPodViewProvider.ts` — Added `connect-src ${webview.cspSource}` to CSP so `fetch()` in `loadAssets()` can work if ever called
+4. `vite.config.ts` — Changed `emptyOutDir: false` → `true` to prevent stale code-split chunks from lingering across builds
+
+**Verification:** After rebuild, `index.js` has 0 `.then(({` patterns (no code-split imports), 0 `Promise.resolve()` patterns, and no separate chunk files in dist/webview/assets/.
+
+**Key Files:**
+- `webview-ui/src/hooks/useExtensionMessages.ts` — Static imports replace 8 dynamic imports
+- `webview-ui/src/office/sprites/assetLoader.ts` — Error handling in character sheet loader
+- `src/SquadPodViewProvider.ts` — CSP connect-src added
+- `webview-ui/vite.config.ts` — emptyOutDir: true
+
+**Pattern:** NEVER use dynamic `import()` in Vite-bundled webview code to access module-level state setters. Code-splitting creates isolated module instances. If module A statically imports a reader from module X, and module B dynamically imports a writer from module X, they may be different copies of X. Always use static imports for modules that share mutable state.
+
+**Test Results:** All 124 tests pass (46 extension + 78 webview), both builds clean.
+
+**Commit:** 74715a4
+
+**Status:** ✅ COMPLETED
+
+## 2026-03-08T05:21:51Z — Full Pipeline Audit: Vite Code-Splitting Root Cause
+
+Conducted end-to-end audit of sprite and tileset rendering pipeline after user reported colored rectangles at runtime despite passing tests.
+
+**Investigation Scope:**
+- webview message handlers (useExtensionMessages.ts)
+- asset loader and sprite sheet loading (assetLoader.ts)
+- renderer main logic (renderer.ts)
+- tileset rendering (tilesetRenderer.ts)
+- build configurations (Vite, esbuild)
+- pixel-agents reference repo comparison
+
+**Root Cause Found:** Vite code-splitting fragmented module instances. The 8 message handlers used dynamic import() calls, which Vite code-split into separate chunks with isolated module state. Meanwhile, renderer.ts statically imported the same modules. Assets written to chunk instances; renderer read from main bundle instances. Two copies of each module existed in memory.
+
+**Why Tests Passed:** Vitest runs all imports statically in the same module graph — no code-splitting occurs.
+
+**Solution:**
+- Converted all 8 dynamic imports in useExtensionMessages.ts to static imports
+- Added emptyOutDir: true to vite.config.ts
+- Verified zero code-split chunks post-rebuild
+- Added try/catch robustness in assetLoader.ts
+- All 124 tests pass
+
+**Key Learning:** NEVER use dynamic import() in Vite webview code for modules that share mutable state. Code-splitting creates isolated instances; reader and writer may reference different copies.
+
+**Decision §17 Added:** No dynamic import() for state-sharing modules in webview.
+
+**Commit:** 74715a4
+**Status:** ✅ COMPLETED
