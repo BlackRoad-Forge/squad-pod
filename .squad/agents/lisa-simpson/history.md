@@ -221,6 +221,40 @@ Established dual-build infrastructure (esbuild + Vite), TypeScript interfaces fo
 
 **Outcome:** ✅ SUCCESS — Sprite asset loading now fully functional via both metadata and legacy paths.
 
+### Character Sheet URI Pipeline — Missing Message Handler (2026-03-08)
+
+**Task:** Fix critical bug where custom PNG character sprite sheets never rendered — characters always fell back to inline colored rectangles.
+
+**Root Cause:** The extension host sent `characterAssetsLoaded` messages (with webview URIs for char_employeeA–D.png files), but the webview's `useExtensionMessages.ts` had NO handler for this message type. The message fell through to the `default: break` case silently. As a result:
+- `characterSheets` Map in `assetLoader.ts` was never populated
+- `getCharacterSheet()` always returned null
+- `drawCharacterFromSheet()` always returned false
+- All characters rendered as colored rectangles
+
+**Fix — Two files:**
+1. **`assetLoader.ts`** — Added `loadCharacterSheetsFromUris(characters)` function:
+   - Accepts `Array<{ id: string; uri: string }>` from the extension message
+   - Extracts sheet key from id: `"char_employeeA"` → `"A"` (strips `char_employee` prefix)
+   - Loads PNG via `new Image()`, runs `removeBackground()` to strip baked checkered bg
+   - Computes frame dimensions using same logic as `loadAssets()` (4 rows, 7 frames/row, scale = frameHeight / TILE_SIZE)
+   - Stores in `characterSheets` Map and sets `assetsReady = true`
+
+2. **`useExtensionMessages.ts`** — Added `characterAssetsLoaded` case (after `tilesetAssetsLoaded`):
+   - Dynamic imports `loadCharacterSheetsFromUris` from assetLoader
+   - Follows identical pattern to other asset message handlers
+
+**Debugging:** Added `console.log` statements to all asset loading paths (tileset metadata, legacy tileset, character sheets) to enable runtime verification in the webview dev console.
+
+**Pattern:** When adding new `OutboundMessage` variants to the discriminated union in `src/types.ts`, always add the corresponding handler in `useExtensionMessages.ts`. The `default: break` case silently swallows unhandled messages — there's no runtime warning for missing handlers.
+
+**Key Files:**
+- `webview-ui/src/office/sprites/assetLoader.ts` — `loadCharacterSheetsFromUris()` function
+- `webview-ui/src/hooks/useExtensionMessages.ts` — `characterAssetsLoaded` case
+- `src/SquadPodViewProvider.ts:311` — Extension sends the message
+- `src/types.ts:259` — Message type definition
+
+**Test Results:** All 124 tests pass (46 extension + 78 webview), both builds clean.
+
 ### Character Asset Loading Webview Handler (2026-03-08)
 
 **Task:** Fix character asset loading in webview post-F5 refresh — characters render as colored rectangles instead of PNG sprites.
