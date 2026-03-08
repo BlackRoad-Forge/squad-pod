@@ -156,3 +156,40 @@ Established dual-build infrastructure (esbuild + Vite), TypeScript interfaces fo
 
 **Test Results:** All 46 tests pass, build clean.
 
+### Tileset Metadata Integration (2026-03-08)
+
+**Task:** Integrate `tileset-metadata.json` as the primary metadata source for the office tileset, superseding the simpler `tileset.json`.
+
+**Problem:** The legacy `tileset.json` has 12 objects with simple `{x,y,w,h}` regions and no categorization. The new `tileset-metadata.json` provides 18 items with type categories (floor, wall, furniture, electronics, appliance, decoration), structured bounds, and an interactables array mapping items to player actions.
+
+**Solution — Layered metadata with backward compatibility:**
+
+**Types Added (src/types.ts):**
+- `ItemType` — union of 6 type categories
+- `ItemBounds` — `{x, y, width, height}` pixel region within tileset PNG
+- `TilesetItem` — `{id, type, bounds}` for each tileset item
+- `TilesetInteractable` — `{item_id, action}` for interactive items
+- `TilesetMetadata` — full metadata structure: tileset_name, tile_size, asset_source, items[], interactables[]
+- `tilesetMetadataLoaded` — new OutboundMessage variant sending parsed metadata + tileset PNG URI
+
+**Provider Changes (src/SquadPodViewProvider.ts):**
+- `loadAndSendCustomAssetUris()` now tries `tileset-metadata.json` first, sends `tilesetMetadataLoaded` message
+- Falls back to legacy `tileset.json` → `tilesetAssetsLoaded` if metadata file missing or malformed
+- Extracted `sendLegacyTilesetData()` helper for the fallback path
+
+**Webview Changes (webview-ui/src/office/sprites/assetLoader.ts):**
+- Added `TilesetMetadata`, `TilesetItem`, `TilesetInteractable`, `ItemBounds`, `ItemType` types (mirror of extension-host types)
+- New module state: `tilesetMetadata`, `tilesetMetadataImage`, `itemById` Map, `itemsByType` Map, `interactables` array
+- `setTilesetMetadata(metadata, pngUri)` — ingests metadata, builds lookup indexes, loads PNG, also populates legacy `tilesetData` for backward compat
+- Query functions: `getItemById(id)`, `getItemsByType(type)`, `getInteractables()`, `getTilesetMetadata()`, `getTilesetMetadataImage()`
+
+**Message Handler (webview-ui/src/hooks/useExtensionMessages.ts):**
+- Added `tilesetMetadataLoaded` case — calls `setTilesetMetadata()` via dynamic import
+
+**Backward Compatibility:** Fully preserved via three layers:
+1. Extension sends `tilesetMetadataLoaded` if metadata.json exists, else `tilesetAssetsLoaded` from legacy JSON
+2. `setTilesetMetadata()` also populates the legacy `tilesetData` object so renderers using `getTilesetData()` continue working
+3. Old `tileset.json` path untouched — still works as a standalone fallback
+
+**Test Results:** All 46 tests pass, build clean.
+
