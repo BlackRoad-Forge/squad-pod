@@ -60,8 +60,8 @@ export interface TilesetMetadata {
 }
 
 export interface CharacterSheetData {
-  /** Pre-processed canvas with background removed (transparent). */
-  image: HTMLCanvasElement;
+  /** Sprite sheet image source for ctx.drawImage(). */
+  image: CanvasImageSource;
   /** Width of a single frame in source pixels. */
   frameWidth: number;
   /** Height of a single frame in source pixels. */
@@ -416,31 +416,22 @@ export function loadCharacterSheetsFromUris(
     const processImage = (img: HTMLImageElement) => {
       try {
         console.error(`[SPRITE-DEBUG] processImage called for "${key}": ${img.width}×${img.height}, complete=${img.complete}`);
-        const processed = removeBackground(img);
-        console.error(`[SPRITE-DEBUG] removeBackground done for "${key}": canvas ${processed.width}×${processed.height}`);
+        // Draw to canvas WITHOUT removeBackground — our PNGs already
+        // have transparent backgrounds from Python PIL processing.
+        // removeBackground was destroying 15-29% of visible pixels
+        // because top-left is (0,0,0,0) → bgR/G/B=0 → any pixel
+        // with R+G+B<45 got erased.
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx2 = canvas.getContext('2d');
+        if (!ctx2) throw new Error('Failed to get 2d context');
+        ctx2.drawImage(img, 0, 0);
+        console.error(`[SPRITE-DEBUG] Canvas drawn for "${key}": ${canvas.width}×${canvas.height}`);
 
-        const rows = 4;
-        const frameHeight = img.height / rows;
-        const scale = Math.max(1, Math.round(frameHeight / TILE_SIZE));
-        const baseHeight = Math.round(frameHeight / scale);
-        const framesPerRow = img.width % 7 === 0 ? 7 : Math.max(1, Math.round(img.width / Math.max(1, frameHeight)));
-        const frameWidth = Math.round(img.width / (framesPerRow || 7));
-        const baseWidth = Math.round(frameWidth / scale);
+        storeCharacterSheet(key, img.width, img.height, canvas);
 
-        characterSheets.set(key, {
-          image: processed,
-          frameWidth,
-          frameHeight,
-          framesPerRow: framesPerRow || 7,
-          rows,
-          scale,
-          baseWidth,
-          baseHeight,
-        });
-
-        loadedCharacterSheetKeys.add(key);
         failedCharacterSheetKeys.delete(key);
-        console.error(`[SPRITE-DEBUG] ✅ Sheet "${key}" stored in characterSheets. Map size: ${characterSheets.size}, keys: [${[...characterSheets.keys()]}]`);
       } catch (e) {
         failedCharacterSheetKeys.add(key);
         console.error(`[SPRITE-DEBUG] ❌ processImage THREW for "${key}":`, e);
@@ -549,89 +540,107 @@ export function loadAssets(): Promise<void> {
 
 // ── Embedded character bootstrap ──────────────────────────────────
 // Load character sprites from data URIs embedded directly in the JS
-// bundle.  This runs at module initialization time, BEFORE any
-// postMessage can arrive, guaranteeing sprites are available for the
-// very first render frame.  The postMessage path
-// (loadCharacterSheetsFromUris) can still override these later.
+// bundle.  Uses createImageBitmap (reliable in Electron) instead of
+// new Image() which has unreliable onload behavior in VS Code webviews.
+// Skips removeBackground() — these PNGs already have transparent
+// backgrounds from Python PIL processing.
 
-function loadEmbeddedCharacters(): void {
-  if (EMBEDDED_CHARACTERS.length === 0) return;
-  console.error('[SPRITE-DEBUG] loadEmbeddedCharacters: loading', EMBEDDED_CHARACTERS.length, 'embedded sheets');
+function storeCharacterSheet(key: string, width: number, height: number, source: CanvasImageSource): void {
+  const rows = 4;
+  const frameHeight = height / rows;
+  const scale = Math.max(1, Math.round(frameHeight / TILE_SIZE));
+  const baseHeight = Math.round(frameHeight / scale);
+  const framesPerRow = width % 7 === 0 ? 7 : Math.max(1, Math.round(width / Math.max(1, frameHeight)));
+  const frameWidth = Math.round(width / (framesPerRow || 7));
+  const baseWidth = Math.round(frameWidth / scale);
 
-  for (const { id, uri } of EMBEDDED_CHARACTERS) {
-    const key = id.replace(/^char_employee/, '');
-    if (!key || !uri.startsWith('data:image/png;base64,')) continue;
-
-    const img = new Image();
-    img.src = uri;
-
-    // Data URIs decode synchronously in all modern browsers and Electron.
-    // After setting .src, .complete is immediately true and dimensions
-    // are available.  No need for onload.
-    if (img.complete && img.naturalWidth > 0) {
-      try {
-        const processed = removeBackground(img);
-        const rows = 4;
-        const frameHeight = img.height / rows;
-        const scale = Math.max(1, Math.round(frameHeight / TILE_SIZE));
-        const baseHeight = Math.round(frameHeight / scale);
-        const framesPerRow = img.width % 7 === 0 ? 7 : Math.max(1, Math.round(img.width / Math.max(1, frameHeight)));
-        const frameWidth = Math.round(img.width / (framesPerRow || 7));
-        const baseWidth = Math.round(frameWidth / scale);
-
-        characterSheets.set(key, {
-          image: processed,
-          frameWidth,
-          frameHeight,
-          framesPerRow: framesPerRow || 7,
-          rows,
-          scale,
-          baseWidth,
-          baseHeight,
-        });
-        expectedCharacterSheetKeys.add(key);
-        loadedCharacterSheetKeys.add(key);
-        console.error(`[SPRITE-DEBUG] ✅ Embedded sheet "${key}" loaded synchronously: ${img.width}×${img.height}, scale=${scale}`);
-      } catch (e) {
-        console.error(`[SPRITE-DEBUG] ❌ Embedded sheet "${key}" processing failed:`, e);
-      }
-    } else {
-      // Fallback: rare case where data URI didn't decode synchronously.
-      // Use onload.
-      console.error(`[SPRITE-DEBUG] Embedded sheet "${key}" not immediate, using onload`);
-      trackImage(img);
-      expectedCharacterSheetKeys.add(key);
-      img.onload = () => {
-        try {
-          const processed = removeBackground(img);
-          const rows = 4;
-          const frameHeight = img.height / rows;
-          const scale = Math.max(1, Math.round(frameHeight / TILE_SIZE));
-          const baseHeight = Math.round(frameHeight / scale);
-          const framesPerRow = img.width % 7 === 0 ? 7 : Math.max(1, Math.round(img.width / Math.max(1, frameHeight)));
-          const frameWidth = Math.round(img.width / (framesPerRow || 7));
-          const baseWidth = Math.round(frameWidth / scale);
-
-          characterSheets.set(key, {
-            image: processed,
-            frameWidth,
-            frameHeight,
-            framesPerRow: framesPerRow || 7,
-            rows,
-            scale,
-            baseWidth,
-            baseHeight,
-          });
-          loadedCharacterSheetKeys.add(key);
-          console.error(`[SPRITE-DEBUG] ✅ Embedded sheet "${key}" loaded via onload: ${img.width}×${img.height}`);
-        } catch (e) {
-          console.error(`[SPRITE-DEBUG] ❌ Embedded sheet "${key}" onload processing failed:`, e);
-        }
-      };
-    }
-  }
-  console.error('[SPRITE-DEBUG] loadEmbeddedCharacters done. characterSheets.size:', characterSheets.size);
+  characterSheets.set(key, {
+    image: source,
+    frameWidth,
+    frameHeight,
+    framesPerRow: framesPerRow || 7,
+    rows,
+    scale,
+    baseWidth,
+    baseHeight,
+  });
+  expectedCharacterSheetKeys.add(key);
+  loadedCharacterSheetKeys.add(key);
+  console.error(`[SPRITE-DEBUG] ✅ Sheet "${key}" stored: ${width}×${height}, ${framesPerRow}×${rows} frames, scale=${scale}, base=${baseWidth}×${baseHeight}`);
 }
 
-// Bootstrap: load embedded characters immediately at module init time.
-loadEmbeddedCharacters();
+async function loadEmbeddedCharactersAsync(): Promise<void> {
+  for (const { id, uri } of EMBEDDED_CHARACTERS) {
+    const key = id.replace(/^char_employee/, '');
+    if (!key) continue;
+
+    const base64 = uri.replace('data:image/png;base64,', '');
+    // Decode base64 → binary → Blob → ImageBitmap (bypasses new Image() entirely)
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'image/png' });
+    const bitmap = await createImageBitmap(blob);
+
+    // Draw bitmap onto a canvas so we have an HTMLCanvasElement
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx2 = canvas.getContext('2d');
+    if (ctx2) {
+      ctx2.drawImage(bitmap, 0, 0);
+      storeCharacterSheet(key, bitmap.width, bitmap.height, canvas);
+    }
+    bitmap.close();
+  }
+}
+
+// Bootstrap: load embedded characters immediately.
+// Uses createImageBitmap (async but resolves in <1 frame for in-memory data).
+// Guarded with typeof checks so it doesn't crash in JSDOM test environments.
+if (typeof createImageBitmap === 'function' && typeof atob === 'function' && EMBEDDED_CHARACTERS.length > 0) {
+  console.error('[SPRITE-DEBUG] loadEmbeddedCharacters: starting async load of', EMBEDDED_CHARACTERS.length, 'sheets');
+  loadEmbeddedCharactersAsync()
+    .then(() => console.error('[SPRITE-DEBUG] loadEmbeddedCharacters: done. characterSheets.size:', characterSheets.size, 'keys:', [...characterSheets.keys()]))
+    .catch(e => console.error('[SPRITE-DEBUG] ❌ loadEmbeddedCharacters failed:', e));
+} else if (EMBEDDED_CHARACTERS.length > 0) {
+  // Fallback for environments without createImageBitmap (shouldn't happen in Electron)
+  console.error('[SPRITE-DEBUG] createImageBitmap not available, trying new Image() fallback');
+  for (const { id, uri } of EMBEDDED_CHARACTERS) {
+    const key = id.replace(/^char_employee/, '');
+    if (!key) continue;
+    try {
+      const img = new Image();
+      img.src = uri;
+      if (img.complete && img.naturalWidth > 0) {
+        // Draw to canvas WITHOUT removeBackground (already transparent)
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx2 = canvas.getContext('2d');
+        if (ctx2) {
+          ctx2.drawImage(img, 0, 0);
+          storeCharacterSheet(key, img.width, img.height, canvas);
+        }
+      } else {
+        // Last resort: async onload
+        const _img = img;
+        const _key = key;
+        trackImage(_img);
+        expectedCharacterSheetKeys.add(_key);
+        _img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = _img.width;
+          canvas.height = _img.height;
+          const ctx2 = canvas.getContext('2d');
+          if (ctx2) {
+            ctx2.drawImage(_img, 0, 0);
+            storeCharacterSheet(_key, _img.width, _img.height, canvas);
+          }
+        };
+      }
+    } catch (e) {
+      console.error(`[SPRITE-DEBUG] ❌ Image fallback failed for "${key}":`, e);
+    }
+  }
+}
