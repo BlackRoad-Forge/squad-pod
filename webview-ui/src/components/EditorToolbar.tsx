@@ -1,9 +1,16 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 import type { EditorState } from '../office/editor/editorState.js';
 import { EditTool, TileType } from '../office/types.js';
 import type { FloorColor, EditTool as EditToolType } from '../office/types.js';
 import { FURNITURE_CATALOG } from '../office/layout/furnitureCatalog.js';
 import type { SpriteData } from '../office/types.js';
+import {
+  getItemsByType,
+  getItemById,
+  getTilesetMetadataImage,
+  areAssetsReady,
+} from '../office/sprites/assetLoader.js';
+import type { ItemType } from '../office/sprites/assetLoader.js';
 
 // ─── Props ─────────────────────────────────────────────────────
 export interface EditorToolbarProps {
@@ -55,6 +62,25 @@ const FLOOR_TYPES: { type: TileType; label: string }[] = [
   { type: TileType.FLOOR_5, label: '5' },
   { type: TileType.FLOOR_6, label: '6' },
   { type: TileType.FLOOR_7, label: '7' },
+];
+
+// Map TileType floor values to tileset-metadata item IDs for previews
+const FLOOR_TYPE_TO_ITEM: Record<number, string> = {
+  [TileType.FLOOR_1]: 'floor_wood',
+  [TileType.FLOOR_2]: 'floor_blue_diamond',
+  [TileType.FLOOR_3]: 'floor_wood',
+  [TileType.FLOOR_4]: 'floor_blue_diamond',
+  [TileType.FLOOR_5]: 'floor_wood',
+  [TileType.FLOOR_6]: 'floor_blue_diamond',
+  [TileType.FLOOR_7]: 'floor_wood',
+};
+
+// Placeable item categories from tileset-metadata.json
+const PLACEABLE_CATEGORIES: { type: ItemType; label: string }[] = [
+  { type: 'furniture', label: 'Furniture' },
+  { type: 'electronics', label: 'Electronics' },
+  { type: 'appliance', label: 'Appliances' },
+  { type: 'decoration', label: 'Decorations' },
 ];
 
 // ─── Styles ────────────────────────────────────────────────────
@@ -290,6 +316,58 @@ function SpritePreview({ sprite, size = 24 }: { sprite: SpriteData; size?: numbe
   );
 }
 
+// ─── Tileset Item Preview (canvas from PNG spritesheet) ────────
+function TilesetItemPreview({ itemId, size = 28 }: { itemId: string; size?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const cvs = canvasRef.current;
+    if (!cvs) return;
+    const ctx = cvs.getContext('2d');
+    if (!ctx) return;
+
+    const image = getTilesetMetadataImage();
+    const item = getItemById(itemId);
+    if (!image || !item) {
+      cvs.width = size;
+      cvs.height = size;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = '#888';
+      ctx.font = '8px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('?', size / 2, size / 2);
+      return;
+    }
+
+    const { x, y, width, height } = item.bounds;
+    cvs.width = width;
+    cvs.height = height;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(image, x, y, width, height, 0, 0, width, height);
+  }, [itemId, size]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        imageRendering: 'pixelated',
+      }}
+    />
+  );
+}
+
+/** Format a tileset metadata item ID into a human-readable label */
+function formatItemLabel(id: string): string {
+  return id
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
 // ─── Color Sliders ─────────────────────────────────────────────
 function ColorSliders({
   label,
@@ -399,12 +477,31 @@ export function EditorToolbar({
   hasSelection,
   onExpandGrid,
 }: EditorToolbarProps) {
+  // Force re-render when tileset assets become available
+  const [_assetTick, setAssetTick] = useState(0);
+  useEffect(() => {
+    if (areAssetsReady()) return;
+    const interval = setInterval(() => {
+      if (areAssetsReady()) {
+        setAssetTick(t => t + 1);
+        clearInterval(interval);
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
   if (!isEditMode) return null;
 
   const activeTool = editorState.tool;
   const showFloorOptions = activeTool === EditTool.TILE_PAINT;
   const showWallOptions = activeTool === EditTool.WALL_PAINT;
   const showFurnitureOptions = activeTool === EditTool.FURNITURE_PLACE;
+
+  // Gather tileset metadata items for each placeable category
+  const metadataCategories = PLACEABLE_CATEGORIES.map(cat => ({
+    ...cat,
+    items: getItemsByType(cat.type),
+  })).filter(cat => cat.items.length > 0);
 
   return (
     <div style={styles.root}>
@@ -426,21 +523,28 @@ export function EditorToolbar({
         </div>
       </div>
 
-      {/* ── Floor Pattern Selector ── */}
+      {/* ── Floor Pattern Selector (with tile previews) ── */}
       {showFloorOptions && (
         <div style={styles.section}>
           <div style={styles.sectionLabel}>Floor Pattern</div>
           <div style={styles.floorGrid}>
-            {FLOOR_TYPES.map(({ type, label }) => (
-              <button
-                key={type}
-                style={styles.floorBtn(editorState.tileType === type)}
-                onClick={() => onTileTypeChange(type)}
-                title={`Floor ${label}`}
-              >
-                {label}
-              </button>
-            ))}
+            {FLOOR_TYPES.map(({ type, label }) => {
+              const itemId = FLOOR_TYPE_TO_ITEM[type];
+              return (
+                <button
+                  key={type}
+                  style={styles.floorBtn(editorState.tileType === type)}
+                  onClick={() => onTileTypeChange(type)}
+                  title={`Floor ${label}${itemId ? ` (${formatItemLabel(itemId)})` : ''}`}
+                >
+                  {itemId ? (
+                    <TilesetItemPreview itemId={itemId} size={22} />
+                  ) : (
+                    label
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -456,6 +560,30 @@ export function EditorToolbar({
         </div>
       )}
 
+      {/* ── Wall Tile Preview ── */}
+      {showWallOptions && (
+        <div style={styles.section}>
+          <div style={styles.sectionLabel}>Wall Tile</div>
+          <div style={styles.furnitureGrid}>
+            {getItemsByType('wall').map(item => (
+              <button
+                key={item.id}
+                style={styles.furnitureBtn(true)}
+                title={formatItemLabel(item.id)}
+              >
+                <TilesetItemPreview itemId={item.id} size={28} />
+                <span style={{ fontSize: '9px' }}>{formatItemLabel(item.id)}</span>
+              </button>
+            ))}
+            {getItemsByType('wall').length === 0 && (
+              <div style={{ fontSize: '10px', color: TEXT_DIM, padding: '4px' }}>
+                Wall (single type)
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Wall Color ── */}
       {showWallOptions && (
         <div style={styles.section}>
@@ -467,7 +595,7 @@ export function EditorToolbar({
         </div>
       )}
 
-      {/* ── Furniture Palette ── */}
+      {/* ── Legacy Furniture Catalog ── */}
       {showFurnitureOptions && (
         <div style={styles.section}>
           <div style={styles.sectionLabel}>Furniture</div>
@@ -486,6 +614,26 @@ export function EditorToolbar({
           </div>
         </div>
       )}
+
+      {/* ── Tileset Metadata Categories (Electronics, Appliances, Decorations, etc.) ── */}
+      {showFurnitureOptions && metadataCategories.map(cat => (
+        <div key={cat.type} style={styles.section}>
+          <div style={styles.sectionLabel}>{cat.label}</div>
+          <div style={styles.furnitureGrid}>
+            {cat.items.map(item => (
+              <button
+                key={item.id}
+                style={styles.furnitureBtn(editorState.furnitureType === item.id)}
+                onClick={() => onFurnitureTypeChange(item.id)}
+                title={formatItemLabel(item.id)}
+              >
+                <TilesetItemPreview itemId={item.id} size={28} />
+                <span style={{ fontSize: '9px' }}>{formatItemLabel(item.id)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {/* ── Selection Actions ── */}
       {hasSelection && (

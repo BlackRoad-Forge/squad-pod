@@ -250,3 +250,14 @@ export function getCatalogEntry(type: string): FurnitureCatalogEntry | undefined
 export function buildDynamicCatalog(): FurnitureCatalogEntry[] {
   return [...FURNITURE_CATALOG];
 }
+
+/**
+ * Create a placeholder sprite of given pixel dimensions.
+ * Used for tileset metadata items that render from the PNG sheet
+ * rather than inline sprite data.
+ */
+export function createPlaceholderSprite(pixelW: number, pixelH: number): SpriteData {
+  return Array.from({ length: pixelH }, () =>
+    Array.from({ length: pixelW }, () => '#444')
+  );
+}

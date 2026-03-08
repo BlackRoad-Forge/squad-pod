@@ -5,10 +5,12 @@ import {
   PlacedFurniture,
   Direction,
   TileType,
-  SpriteData
+  SpriteData,
+  TILE_SIZE,
 } from '../types.js';
 import { DEFAULT_COLS, DEFAULT_ROWS, DEFAULT_FLOOR_COLOR } from '../../constants.js';
-import { getCatalogEntry } from './furnitureCatalog.js';
+import { getCatalogEntry, createPlaceholderSprite } from './furnitureCatalog.js';
+import { getItemById } from '../sprites/assetLoader.js';
 
 export function createDefaultLayout(): OfficeLayout {
   const tiles: number[] = [];
@@ -66,29 +68,50 @@ export function layoutToFurnitureInstances(furniture: PlacedFurniture[]): Furnit
   const instances: FurnitureInstance[] = [];
   for (const furn of furniture) {
     const entry = getCatalogEntry(furn.type);
-    if (!entry) continue;
+    if (entry) {
+      let sprite = entry.sprite;
+      let width = entry.width;
+      let height = entry.height;
 
-    let sprite = entry.sprite;
-    let width = entry.width;
-    let height = entry.height;
+      if (furn.rotation === 90 || furn.rotation === 270) {
+        [width, height] = [height, width];
+        sprite = rotateSprite(sprite, furn.rotation);
+      } else if (furn.rotation === 180) {
+        sprite = rotateSprite(sprite, furn.rotation);
+      }
 
-    if (furn.rotation === 90 || furn.rotation === 270) {
-      [width, height] = [height, width];
-      sprite = rotateSprite(sprite, furn.rotation);
-    } else if (furn.rotation === 180) {
-      sprite = rotateSprite(sprite, furn.rotation);
+      instances.push({
+        uid: furn.uid,
+        type: furn.type,
+        col: furn.col,
+        row: furn.row,
+        width,
+        height,
+        sprite,
+        rotation: furn.rotation
+      });
+    } else {
+      // Tileset metadata item — look up bounds from the asset loader
+      const metaItem = getItemById(furn.type);
+      if (metaItem) {
+        const pixelW = metaItem.bounds.width;
+        const pixelH = metaItem.bounds.height;
+        const width = Math.ceil(pixelW / TILE_SIZE);
+        const height = Math.ceil(pixelH / TILE_SIZE);
+        const sprite = createPlaceholderSprite(pixelW, pixelH);
+
+        instances.push({
+          uid: furn.uid,
+          type: furn.type,
+          col: furn.col,
+          row: furn.row,
+          width,
+          height,
+          sprite,
+          rotation: furn.rotation
+        });
+      }
     }
-
-    instances.push({
-      uid: furn.uid,
-      type: furn.type,
-      col: furn.col,
-      row: furn.row,
-      width,
-      height,
-      sprite,
-      rotation: furn.rotation
-    });
   }
   return instances;
 }

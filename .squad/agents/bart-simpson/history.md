@@ -580,3 +580,27 @@ Why tests passed: Vitest runs all imports statically in the same module graph, s
 **Decision §17 Captured:** No dynamic import() for state-sharing modules in webview.
 
 **Commit:** 74715a4
+
+### EditorToolbar All-Categories Fix (2026-03-08)
+
+Fixed the EditorToolbar so all tile categories from tileset-metadata.json are visible and usable:
+
+**Problem:** Only the Furniture category showed items. Floor tool had numbered buttons with no visual preview. Wall tool showed only color sliders. Electronics, Appliances, and Decorations categories were completely missing.
+
+**Fix — EditorToolbar.tsx:**
+- Added `TilesetItemPreview` component that renders items from the tileset PNG sprite sheet onto mini canvases using metadata bounds
+- Floor pattern buttons now show actual tile sprite previews from the tileset (floor_wood, floor_blue_diamond) instead of bare numbers
+- Wall tool section now shows wall tile previews before the color sliders
+- Furniture tool shows the legacy FURNITURE_CATALOG items PLUS tileset metadata categories: Furniture, Electronics, Appliances, Decorations
+- Added asset-ready polling (`useEffect` + `setInterval`) so the toolbar re-renders when tileset metadata loads async
+
+**Fix — layoutManager.ts:**
+- `layoutToFurnitureInstances()` now handles tileset metadata items that aren't in the static FURNITURE_CATALOG. Falls back to metadata bounds for dimensions and creates placeholder sprites.
+
+**Fix — renderer.ts:**
+- Furniture rendering now tries `drawMetadataItemScaled()` as a second fallback after the legacy `drawTilesetFurniture()` fails, before falling back to inline sprite data.
+
+**Fix — furnitureCatalog.ts:**
+- Added `createPlaceholderSprite()` utility for generating placeholder sprite data for metadata items.
+
+**Key pattern:** Tileset metadata items use their ID (e.g. 'vending_machine_soda') as the furniture type string, flowing through placement → hydration → rendering. The renderer cascade is: legacy tileset → metadata PNG → inline sprite.

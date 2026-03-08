@@ -35,7 +35,7 @@ import { getCharacterSprites, BUBBLE_PERMISSION_SPRITE, BUBBLE_WAITING_SPRITE } 
 import { getColorizedFloorSprite } from '../floorTiles.js';
 import { wallColorToHex } from '../wallTiles.js';
 import { areAssetsReady } from '../sprites/assetLoader.js';
-import { drawTilesetFurniture, drawTilesetTile } from '../sprites/tilesetRenderer.js';
+import { drawTilesetFurniture, drawTilesetTile, drawMetadataItemScaled } from '../sprites/tilesetRenderer.js';
 import { drawCharacterFromSheet, getCharacterSheetOffset } from '../sprites/characterSheetRenderer.js';
 
 interface Drawable {
@@ -219,8 +219,16 @@ export function renderScene(
         drawable.furnitureDestW!, drawable.furnitureDestH!,
       );
       if (!tilesetDrawn) {
-        const canvas = getCachedSprite(drawable.sprite, zoom);
-        ctx.drawImage(canvas, drawable.x, drawable.y);
+        // Try tileset metadata rendering (for items placed from metadata catalog)
+        const metadataDrawn = pngReady && drawable.furnitureType && drawMetadataItemScaled(
+          ctx, drawable.furnitureType,
+          drawable.x, drawable.y,
+          drawable.furnitureDestW!, drawable.furnitureDestH!,
+        );
+        if (!metadataDrawn) {
+          const canvas = getCachedSprite(drawable.sprite, zoom);
+          ctx.drawImage(canvas, drawable.x, drawable.y);
+        }
       }
     }
   }
