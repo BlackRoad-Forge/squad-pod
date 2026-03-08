@@ -353,6 +353,78 @@ When an extension host handler detects a condition that prevents normal flow:
 
 This pattern applies to any situation where the extension cannot fulfill the webview's expectations.
 
+### 8. Tileset Import Pipeline — Self-Contained Scripts
+
+**Date:** 2026-07-24  
+**Author:** Lisa Simpson (Core Dev)  
+**Status:** Implemented
+
+#### Context
+
+Ported the tileset import pipeline from pixel-agents into squad-pod. The pixel-agents `export-characters.ts` imported `CHARACTER_TEMPLATES` and `CHARACTER_PALETTES` from `webview-ui/src/office/sprites/spriteData.js`, which doesn't exist in squad-pod. Our sprite system uses procedural generation (`defaultCharacters.ts`) with a simpler 3-color palette model.
+
+#### Decision
+
+**Scripts in `scripts/` are self-contained — they duplicate any data they need rather than importing from extension host or webview source.**
+
+Specifically:
+- `export-characters.ts` duplicates the 6 character palettes and sprite generation functions from `defaultCharacters.ts`
+- This avoids cross-build-target imports (scripts run via tsx in Node, webview code is browser-targeted ESM)
+- If palettes change in `defaultCharacters.ts`, they must be updated in `export-characters.ts` too
+
+#### Rationale
+
+- **Simplicity:** Scripts run via `npx tsx` from repo root. No build step needed.
+- **Isolation:** Scripts don't depend on webview build artifacts or extension host code.
+- **Reliability:** No risk of ESM/CJS import resolution issues across build targets.
+- **Tradeoff accepted:** Palette duplication is a small maintenance burden (6 color objects) vs. the complexity of cross-target imports.
+
+#### Consequences
+
+- If character palettes are added or modified, update both `defaultCharacters.ts` and `scripts/export-characters.ts`
+- Future direction-specific sprite templates would need to be reflected in the export script
+
+### 9. Pixel Agents Gap Analysis
+
+**Date:** 2026-03-06  
+**By:** Homer Simpson (Lead)  
+**Status:** Approved
+
+#### Context
+
+Squad-pod successfully implements the core layout editor features from pixel-agents (tile painting, furniture placement, rotation, undo/redo) and adds significant Squad-specific value (agent visualization, team discovery, telemetry streaming). The main feature gaps are cosmetic (matrix effect), advanced editing workflows (ghost preview, wall drag tracking, toolbar UI richness), and furniture catalog sophistication (rotation/state groups, dynamic catalog loading from external assets, category filtering).
+
+#### Key Gaps (Prioritized)
+
+**P0 — Blocking:** None. Core editing is fully functional.
+
+**P1 — Important but Not Blocking:**
+1. **Editor Toolbar UI** — No visual toolbar; tools triggered via settings/hotkeys only
+2. **Furniture Catalog UI with Category Filtering** — No UI to browse furniture by category
+3. **Color Picker UI (HSB Sliders)** — Field exists in `FloorColor` type but no UI
+4. **Ghost Preview During Furniture Drag** — Drag works but lacks visual feedback
+
+**P2 — Nice to Have:**
+- Matrix rain effect (cosmetic)
+- Grid resizing UI (expandability)
+- Furniture rotation & state groups (advanced catalog)
+- Dynamic catalog from external assets (maintainability at scale)
+
+#### Recommendation
+
+Implement **EditorToolbar** + **Furniture Palette UI** + **Color Picker** in next iteration (~2-3 days for a small team). These three unlock the discovery experience and bring UX parity with pixel-agents.
+
+#### Roadmap
+
+- **v1.0**: Core editor (done) + EditorToolbar + Furniture Palette + Color Picker
+- **v1.1**: Ghost preview + keyboard shortcuts docs
+- **v2.0**: Consider grid resizing, state toggling, dynamic catalog
+- **v3.0+**: Matrix effect, sound notifications, sub-agent visualization polish
+
+#### Full Analysis
+
+See `.squad/decisions/inbox/homer-simpson-pixel-agents-gap-analysis.md` for complete feature comparison matrix, implementation notes, and file references.
+
 ## Governance
 
 - All meaningful changes require team consensus

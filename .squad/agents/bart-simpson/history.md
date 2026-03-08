@@ -103,6 +103,35 @@ Completed full webview UI implementation in three parallel spawns + import fix s
 **Integration Ready:**
 - Webview receives Squad agent/team state via postMessage
 - Agents render with string IDs (PLAYER_AGENT_ID, others from squad roster)
+
+### Tileset Import Pipeline Port — HTML Browser Tools (2026-07-24 - 2026-03-08)
+
+**Task:** Ported 4 HTML browser tools from pablodelucca/pixel-agents into squad-pod with Lisa Simpson (TypeScript scripts).
+
+**Session:** Brian Swiger requested porting complete pipeline (7 TS + 4 HTML files). Both Lisa and Bart spawned in parallel.
+
+**Files Created:**
+- `scripts/2-asset-editor.html` — Interactive browser tool for visual asset editing
+- `scripts/4-review-metadata.html` — Review and edit asset metadata before export
+- `scripts/asset-manager.html` — Centralized asset inventory browser
+- `scripts/wall-tile-editor.html` — Wall tile bitmask configuration UI
+
+**Branding & Title Updates:**
+All HTML files updated with "— Squad Pod" branding in title tags:
+- `<title>Asset Editor — Squad Pod</title>`
+- `<title>Review Metadata — Squad Pod</title>`
+- `<title>Asset Manager — Squad Pod</title>`
+- `<title>Wall Tile Editor — Squad Pod</title>`
+
+**Integration Notes:**
+- Tools are designed to run as standalone HTML files in a browser
+- Serve from `scripts/` directory or open directly in file:// URL
+- Work in conjunction with TypeScript orchestrator (`0-import-tileset.ts`)
+- No changes to extension host or webview code required
+
+**Test Results:** All 46 tests pass, no breaking changes to existing functionality.
+
+**Outcome:** SUCCESS — HTML browser tools ported and ready. Users can now use the complete asset import workflow: detect → inspect (Vision) → edit (HTML UI) → review metadata (HTML UI) → export, with optional manual wall tile configuration.
 - Name + role labels overlay on agent sprites
 - Office layout persists via VS Code webview state
 - Audio API ready for notification/effect sounds
@@ -380,3 +409,16 @@ Wrote comprehensive unit tests for all Squad Pod webview engine and editor code 
 - Marge Simpson owns testing strategy/tooling decisions
 - These tests document expected behavior for Lisa's engine modules
 - Future refactoring by any agent should maintain these test contracts
+
+### HTML Asset Tools Ported from pixel-agents (2026-07-24)
+
+Ported four self-contained HTML browser tools from pablodelucca/pixel-agents into scripts/:
+
+1. **scripts/2-asset-editor.html** (34KB) — 3-pane resizable asset editor for refining detected asset bounding boxes, splitting overlapped assets, and erasing unwanted pixels. Supports localStorage auto-save.
+2. **scripts/4-review-metadata.html** (22KB) — Metadata reviewer with 4x zoom previews. Edit name, label, category, footprint, flags. Filter by category, search by name. Auto-saves to localStorage.
+3. **scripts/asset-manager.html** (58KB) — Comprehensive all-in-one asset management tool with undo/redo, File System Access API for direct save, add/redraw asset regions on tileset, pixel eraser, rotation groups, background tile configuration.
+4. **scripts/wall-tile-editor.html** (11KB) — Interactive wall auto-tile editor. Load walls.png, see all 16 bitmask pieces, paint/erase walls with live auto-tiling preview.
+
+**Branding:** Updated `<title>` tags to include "— Squad Pod" suffix. The original files had no "Pixel Agents" text strings in their content — they used generic tool names throughout.
+
+**Key conventions:** All tools are self-contained single HTML files (no build step). They reference JSON data via file input or localStorage. Users open them directly in a web browser.

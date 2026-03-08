@@ -84,3 +84,33 @@ Established dual-build infrastructure (esbuild + Vite), TypeScript interfaces fo
 
 **Decision:** See `.squad/decisions/inbox/lisa-simpson-layout-fallback.md` for architectural rationale.
 
+### Tileset Import Pipeline Port (2026-07-24 - 2026-03-08)
+
+**Task:** Ported the tileset import scripts from pablodelucca/pixel-agents into squad-pod with Bart Simpson (HTML tools).
+
+**Session:** Brian Swiger requested porting complete pipeline (7 TS + 4 HTML files). Both Lisa and Bart spawned in parallel.
+
+**Files Created by Lisa:**
+- `scripts/0-import-tileset.ts` — 7-stage interactive CLI orchestrator (runs via `npm run import-tileset`)
+- `scripts/1-detect-assets.ts` — Flood-fill asset detection from PNG tilesets
+- `scripts/3-vision-inspect.ts` — Claude Vision auto-metadata generation (requires `@anthropic-ai/sdk` + `ANTHROPIC_API_KEY`)
+- `scripts/5-export-assets.ts` — Export assets to `webview-ui/public/assets/furniture/{category}/` + `furniture-catalog.json`
+- `scripts/export-characters.ts` — Bakes 6 character palette PNGs to `webview-ui/public/assets/characters/`
+- `scripts/generate-walls.js` — Generates 16-config bitmask auto-tile `walls.png`
+- `scripts/.tileset-working/.gitkeep` — Working directory for intermediate pipeline files
+
+**Key Adaptations:**
+- All branding changed: "Pixel Agents"/"ARCADIA" → "Squad Pod"
+- Script invocations changed from `npx ts-node` → `npx tsx` (tsx is our devDependency)
+- `export-characters.ts` fully rewritten: pixel-agents used a template+palette cell-mapping system (`CHARACTER_TEMPLATES`/`CHARACTER_PALETTES` with hair/skin/shirt/pants/shoes slots). Squad-pod uses procedural sprite generation with a simpler 3-color palette (shirt/skin/pants). Duplicated palette definitions and sprite creation functions from `defaultCharacters.ts` to keep the script self-contained.
+- `3-vision-inspect.ts`: Changed Claude model from `claude-opus-4-6` to `claude-sonnet-4-20250514` (more cost-effective for metadata generation)
+- All file paths updated to squad-pod conventions (`webview-ui/public/assets/` output, `scripts/.tileset-working/` intermediates)
+- Stage 3 "run specific stage" menu option implemented (was a placeholder in pixel-agents)
+- Added `@anthropic-ai/sdk` as devDependency, `import-tileset` npm script
+
+**Pattern:** Scripts are standalone CLI tools run via tsx. They don't import from extension host code. The `export-characters.ts` script duplicates palette data rather than importing from the webview source to avoid cross-build-target import complexity. (See `.squad/decisions.md` § 8: Tileset Import Pipeline — Self-Contained Scripts)
+
+**Test Results:** All 46 tests pass, build clean.
+
+**Outcome:** SUCCESS — Complete tileset import pipeline ported and working.
+
