@@ -283,6 +283,7 @@ export function useExtensionMessages(
         case 'tilesetMetadataLoaded': {
           const { metadata, tilesetPngUri } = message;
           if (metadata && tilesetPngUri) {
+            console.log('[useExtensionMessages] tilesetMetadataLoaded received:', metadata.items?.length, 'items');
             import('../office/sprites/assetLoader.js').then(({ setTilesetMetadata }) => {
               setTilesetMetadata(metadata, tilesetPngUri);
             });
@@ -293,8 +294,20 @@ export function useExtensionMessages(
         case 'tilesetAssetsLoaded': {
           const { tilesetData, tilesetPngUri } = message;
           if (tilesetData && tilesetPngUri) {
+            console.log('[useExtensionMessages] tilesetAssetsLoaded received');
             import('../office/sprites/assetLoader.js').then(({ setLegacyTilesetAssets }) => {
               setLegacyTilesetAssets(tilesetData as { tile_size?: number; objects: Record<string, { x: number; y: number; w: number; h: number }> }, tilesetPngUri as string);
+            });
+          }
+          break;
+        }
+
+        case 'characterAssetsLoaded': {
+          const { characters } = message;
+          if (characters && Array.isArray(characters)) {
+            console.log('[useExtensionMessages] characterAssetsLoaded received:', characters.length, 'sheets');
+            import('../office/sprites/assetLoader.js').then(({ loadCharacterSheetsFromUris }) => {
+              loadCharacterSheetsFromUris(characters);
             });
           }
           break;

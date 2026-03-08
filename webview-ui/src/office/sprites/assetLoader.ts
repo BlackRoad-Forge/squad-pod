@@ -161,11 +161,11 @@ export function setTilesetMetadata(metadata: TilesetMetadata, tilesetPngUri: str
     }
   }
 
-  // Load the tileset PNG image for metadata-based rendering
   const img = new Image();
   img.onload = () => {
     tilesetMetadataImage = img;
     assetsReady = true;
+    console.log(`[assetLoader] Tileset metadata PNG loaded: ${img.width}×${img.height}`);
   };
   img.onerror = () => {
     console.warn('[assetLoader] Failed to load tileset PNG for metadata:', tilesetPngUri);
@@ -194,6 +194,7 @@ export function setLegacyTilesetAssets(
       tileSize: data.tile_size ?? TILE_SIZE,
     };
     assetsReady = true;
+    console.log(`[assetLoader] Legacy tileset PNG loaded: ${img.width}×${img.height}, ${Object.keys(data.objects ?? {}).length} objects`);
   };
   img.onerror = () => {
     console.warn('[assetLoader] Failed to load tileset PNG for legacy data:', tilesetPngUri);
@@ -245,6 +246,62 @@ function removeBackground(img: HTMLImageElement, tolerance: number = 45): HTMLCa
 
 function resolveUrl(relativePath: string): string {
   return assetBaseUrl + relativePath;
+}
+
+// ── URI-based character sheet loader ──────────────────────────────
+
+/**
+ * Load character sprite sheets from webview-safe URIs sent by the
+ * extension host via `characterAssetsLoaded`.  Each entry has an id
+ * like "char_employeeA" and a webview URI pointing to the PNG.
+ *
+ * This populates the same `characterSheets` Map used by
+ * `drawCharacterFromSheet()`, keyed by the trailing letter (A–D).
+ */
+export function loadCharacterSheetsFromUris(
+  characters: Array<{ id: string; uri: string }>
+): void {
+  console.log('[assetLoader] loadCharacterSheetsFromUris called with', characters.length, 'sheets');
+
+  for (const { id, uri } of characters) {
+    // Extract sheet key: "char_employeeA" → "A"
+    const key = id.replace(/^char_employee/, '');
+    if (!key) {
+      console.warn('[assetLoader] Could not extract sheet key from id:', id);
+      continue;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const processed = removeBackground(img);
+
+      const rows = 4;
+      const frameHeight = img.height / rows;
+      const scale = Math.round(frameHeight / TILE_SIZE);
+      const baseHeight = Math.round(frameHeight / scale);
+      const framesPerRow = img.width % 7 === 0 ? 7 : Math.round(img.width / (baseHeight * scale * (img.width / img.height)));
+      const frameWidth = Math.round(img.width / (framesPerRow || 7));
+      const baseWidth = Math.round(frameWidth / scale);
+
+      characterSheets.set(key, {
+        image: processed,
+        frameWidth,
+        frameHeight,
+        framesPerRow: framesPerRow || 7,
+        rows,
+        scale,
+        baseWidth,
+        baseHeight,
+      });
+
+      console.log(`[assetLoader] Character sheet "${key}" loaded: ${img.width}×${img.height}, ${framesPerRow}×${rows} frames, scale=${scale}`);
+      assetsReady = true;
+    };
+    img.onerror = () => {
+      console.warn(`[assetLoader] Failed to load character sheet "${key}" from:`, uri);
+    };
+    img.src = uri;
+  }
 }
 
 // ── Public loader ─────────────────────────────────────────────────
