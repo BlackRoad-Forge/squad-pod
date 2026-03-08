@@ -161,30 +161,42 @@ export function setTilesetMetadata(metadata: TilesetMetadata, tilesetPngUri: str
     }
   }
 
-  // Load the tileset PNG image for rendering
+  // Load the tileset PNG image for metadata-based rendering
   const img = new Image();
   img.onload = () => {
     tilesetMetadataImage = img;
-
-    // Also populate legacy tilesetData for backward compat with renderers
-    // that still use getTilesetData()
-    const legacyObjects: Record<string, TilesetObjectDef> = {};
-    for (const item of metadata.items) {
-      legacyObjects[item.id] = {
-        x: item.bounds.x,
-        y: item.bounds.y,
-        w: item.bounds.width,
-        h: item.bounds.height,
-      };
-    }
-    tilesetData = {
-      image: img,
-      objects: legacyObjects,
-      tileSize: metadata.tile_size ?? TILE_SIZE,
-    };
+    assetsReady = true;
   };
   img.onerror = () => {
     console.warn('[assetLoader] Failed to load tileset PNG for metadata:', tilesetPngUri);
+  };
+  img.src = tilesetPngUri;
+}
+
+/**
+ * Ingest legacy tileset data from a `tilesetAssetsLoaded` message.
+ * Loads the tileset PNG and populates the legacy TilesetData used by
+ * renderers calling `getTilesetData()` / `drawTilesetFurniture()`.
+ *
+ * The legacy tileset.json uses different object names than
+ * tileset-metadata.json, so both paths must be populated for full
+ * rendering support.
+ */
+export function setLegacyTilesetAssets(
+  data: { tile_size?: number; objects: Record<string, TilesetObjectDef> },
+  tilesetPngUri: string,
+): void {
+  const img = new Image();
+  img.onload = () => {
+    tilesetData = {
+      image: img,
+      objects: data.objects ?? {},
+      tileSize: data.tile_size ?? TILE_SIZE,
+    };
+    assetsReady = true;
+  };
+  img.onerror = () => {
+    console.warn('[assetLoader] Failed to load tileset PNG for legacy data:', tilesetPngUri);
   };
   img.src = tilesetPngUri;
 }

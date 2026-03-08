@@ -276,7 +276,7 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
         .asWebviewUri(vscode.Uri.file(tilesetPngPath))
         .toString();
 
-      // Prefer tileset-metadata.json (richer: typed items, interactables)
+      // Send rich metadata when available (for metadata-based rendering)
       if (fs.existsSync(metadataJsonPath)) {
         try {
           const metadata: TilesetMetadata = JSON.parse(
@@ -284,13 +284,13 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
           );
           this.postMessage({ type: 'tilesetMetadataLoaded', tilesetPngUri, metadata });
         } catch {
-          // metadata JSON malformed — try legacy fallback
-          this.sendLegacyTilesetData(legacyJsonPath, tilesetPngUri);
+          // metadata JSON malformed — skip, legacy below still sent
         }
-      } else {
-        // No metadata file — fall back to legacy tileset.json
-        this.sendLegacyTilesetData(legacyJsonPath, tilesetPngUri);
       }
+
+      // Always send legacy tileset data (drawTilesetFurniture relies on
+      // the tileset.json object names which differ from metadata item IDs)
+      this.sendLegacyTilesetData(legacyJsonPath, tilesetPngUri);
     }
 
     // ── Custom character sprite sheets (char_employeeA–D.png) ────────

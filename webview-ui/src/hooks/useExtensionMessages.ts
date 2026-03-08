@@ -290,6 +290,16 @@ export function useExtensionMessages(
           break;
         }
 
+        case 'tilesetAssetsLoaded': {
+          const { tilesetData, tilesetPngUri } = message;
+          if (tilesetData && tilesetPngUri) {
+            import('../office/sprites/assetLoader.js').then(({ setLegacyTilesetAssets }) => {
+              setLegacyTilesetAssets(tilesetData as { tile_size?: number; objects: Record<string, { x: number; y: number; w: number; h: number }> }, tilesetPngUri as string);
+            });
+          }
+          break;
+        }
+
         case 'agentDetailLoaded': {
           const { detail } = message;
           setAgentDetail(detail);
