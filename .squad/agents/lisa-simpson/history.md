@@ -334,3 +334,45 @@ Diagnosed and fixed the final rendering gap: while sprite assets (character PNGs
 **Decision Added:** `.squad/decisions.md` § 14 — Tileset PNG replaces colored rectangles (architectural rationale + future extensibility).
 
 **Status:** ✅ COMPLETED
+### Character Sprite Sheet E Integration (2026-03-07)
+
+**Task:** Integrate new character sprite sheet `char_employeeE.png` (2385x1280 source) into the existing A-D pipeline.
+
+**Challenge:** The source sheet's 2385px width doesn't divide cleanly by any standard frame count that produces integer base pixel widths. Auto-correlation analysis identified 6 distinct character poses at ~414px spacing, but 2385/6 = 397.5 (non-integer).
+
+**Solution — Image Recomposition (Option B):**
+- Used Python/Pillow to recompose the 2385x1280 source into 3220x1280 (matching A-D format exactly)
+- Divided source into 6 equal strips (~397.5px each), centered each in a 460px output frame
+- 7th frame (index 6) filled with background color — animation only uses indices 0-3 anyway
+- Result: zero code changes needed for frame detection (3220 % 7 === 0 → 7 frames at 460px)
+
+**Why not Option A (dynamic frame detection)?**
+- 2385 doesn't divide cleanly by any frame count to produce integer base widths
+- Auto-detection from dimensions alone is ambiguous (multiple frame counts give similar quality scores)
+- Content-aware detection (counting body blobs) would add complexity to browser-side JS for a single edge case
+- Recomposition is simpler, more reliable, and keeps the pipeline uniform
+
+**Background Removal:** The E sheet uses darker background (133,133,133 gray) vs A-D (~231,233,232 near-white). Tolerance=45 works perfectly — character pixels have minimum diff of 78 from background.
+
+**Code Changes:**
+- `characterSheetRenderer.ts` — PALETTE_TO_SHEET: `['A','B','C','D','A','B']` → `['A','B','C','D','E','A']`
+- `assetLoader.ts` — Static charKeys: `['A','B','C','D']` → `['A','B','C','D','E']`
+- Extension host auto-discovers via existing `char_employee*.png` glob — no changes needed
+
+**Test Results:** All 124 tests pass (46 extension + 78 webview), both builds clean.
+
+**Pattern:** When a new sprite sheet has non-standard dimensions, recompose to match the existing format rather than adding dynamic detection complexity. The pipeline's uniformity (7 frames × 460px) is worth the one-time image preprocessing cost.
+
+## Orchestration Events (2026-03-08T04:54)
+
+**employeeE Sprite Integration — Validation & Commit (2026-03-08T04:54)**
+
+Completed integration of char_employeeE sprite sheet as background task via Copilot spawn. 
+
+**Summary:**
+- Recomposed 2385×1280 source PNG to 3220×1280 (7×460 frame format) using Python/Pillow
+- Updated `assetLoader.ts` palette mapping for "E" at index 4
+- All 124 tests pass, both builds clean
+- Committed as 655c7d3 with full asset pipeline validation
+
+**Outcome:** ✅ SUCCESS — Character roster now includes Employee E. Decision reference: `.squad/decisions.md` § 16 (non-standard sprite sheet recomposition pattern).

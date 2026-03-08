@@ -743,3 +743,31 @@ Integrate tileset-metadata.json as the primary metadata source for office assets
 #### Rationale
 
 User request — captured for team memory.
+
+### 16. Recompose Non-Standard Sprite Sheets to Match Pipeline Format
+
+**Author:** Lisa Simpson
+**Date:** 2025-07-25
+**Status:** Implemented
+
+#### Context
+
+Character sprite sheets A-D follow a uniform format: 3220×1280 pixels, 7 frames per row × 4 direction rows, 460×320 per frame. The new sheet E arrived at 2385×1280 with 6 character poses at irregular spacing (~414px apart). The width doesn't divide cleanly by any frame count to produce integer base pixel dimensions.
+
+#### Decision
+
+When a new sprite sheet has non-standard dimensions, **recompose it to 3220×1280** (matching A-D format) using image preprocessing rather than adding dynamic frame detection to the browser-side pipeline.
+
+#### Rationale
+
+- Pipeline uniformity eliminates an entire class of frame-alignment bugs
+- Auto-detection from dimensions alone is ambiguous (multiple valid frame counts for most widths)
+- Content-aware detection (body blob counting) adds complexity for a rare edge case
+- One-time Python preprocessing is simpler and more reliable than runtime detection
+- The \PALETTE_TO_SHEET\ mapping and animation frame indices assume consistent frame geometry
+
+#### Consequences
+
+- New character sheets must be preprocessed to 3220×1280 before adding to \webview-ui/public/assets/characters/\
+- The preprocessing recipe: divide source into N strips, center each in a 460px cell, fill remaining frames with background
+- If future sheets require >7 frames, the pipeline will need refactoring (but 7 frames exceeds the animation's max index of 3)
