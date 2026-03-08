@@ -93,6 +93,21 @@ const itemById = new Map<string, TilesetItem>();
 const itemsByType = new Map<ItemType, TilesetItem[]>();
 let interactables: TilesetInteractable[] = [];
 
+// ── In-flight image references ───────────────────────────────────
+// Keep strong references to Image objects during async loads to
+// prevent garbage collection before onload/onerror fires.  Without
+// this, local-variable Images that go out of scope may be collected
+// by the browser, causing silent load failures (neither onload nor
+// onerror fires).
+const _pendingImages = new Set<HTMLImageElement>();
+
+function trackImage(img: HTMLImageElement): void {
+  _pendingImages.add(img);
+  const cleanup = () => { _pendingImages.delete(img); };
+  img.addEventListener('load', cleanup);
+  img.addEventListener('error', cleanup);
+}
+
 // ── Public accessors ──────────────────────────────────────────────
 
 export function areAssetsReady(): boolean {
@@ -143,6 +158,12 @@ export function getInteractables(): TilesetInteractable[] {
  * Ingest rich tileset metadata sent by the extension host via
  * `tilesetMetadataLoaded`.  Builds the id and type lookup indexes,
  * then loads the tileset PNG image in the browser.
+ *
+ * Uses plain `new Image()` WITHOUT crossOrigin — the tileset is only
+ * used with `ctx.drawImage()` which works on tainted canvases.
+ * Setting crossOrigin='anonymous' in VS Code webviews is unreliable
+ * because the vscode-resource server may not send CORS headers,
+ * causing the load to fail entirely.
  */
 export function setTilesetMetadata(metadata: TilesetMetadata, tilesetPngUri: string): void {
   console.log('[assetLoader] setTilesetMetadata called with', metadata.items?.length, 'items, URI:', tilesetPngUri.slice(0, 80));
@@ -163,28 +184,16 @@ export function setTilesetMetadata(metadata: TilesetMetadata, tilesetPngUri: str
   }
   console.log('[assetLoader] itemById has', itemById.size, 'entries; floor_wood?', itemById.has('floor_wood'), 'wall_white_panel?', itemById.has('wall_white_panel'));
 
+  // No crossOrigin — tileset only needs drawImage() not getImageData()
   const img = new Image();
-  img.crossOrigin = 'anonymous';
+  trackImage(img);
   img.onload = () => {
     tilesetMetadataImage = img;
     assetsReady = true;
     console.log(`[assetLoader] ✅ Tileset metadata PNG loaded: ${img.width}×${img.height}, assetsReady=true`);
   };
   img.onerror = (e) => {
-    console.error('[assetLoader] ❌ Failed to load tileset PNG for metadata:', tilesetPngUri, e);
-    // Retry without crossOrigin — some VS Code webview environments
-    // serve local files without CORS headers, causing crossOrigin
-    // loads to fail even though non-CORS loads succeed.
-    const retry = new Image();
-    retry.onload = () => {
-      tilesetMetadataImage = retry;
-      assetsReady = true;
-      console.log(`[assetLoader] ✅ Tileset metadata PNG loaded (retry, no CORS): ${retry.width}×${retry.height}`);
-    };
-    retry.onerror = (e2) => {
-      console.error('[assetLoader] ❌ Tileset PNG retry also failed:', e2);
-    };
-    retry.src = tilesetPngUri;
+    console.error('[assetLoader] ❌ Failed to load tileset metadata PNG:', tilesetPngUri.slice(0, 120), e);
   };
   img.src = tilesetPngUri;
 }
@@ -203,8 +212,9 @@ export function setLegacyTilesetAssets(
   tilesetPngUri: string,
 ): void {
   console.log('[assetLoader] setLegacyTilesetAssets called with', Object.keys(data.objects ?? {}).length, 'objects');
+  // No crossOrigin — legacy tileset only needs drawImage()
   const img = new Image();
-  img.crossOrigin = 'anonymous';
+  trackImage(img);
   img.onload = () => {
     tilesetData = {
       image: img,
@@ -215,22 +225,7 @@ export function setLegacyTilesetAssets(
     console.log(`[assetLoader] ✅ Legacy tileset PNG loaded: ${img.width}×${img.height}, ${Object.keys(data.objects ?? {}).length} objects, assetsReady=true`);
   };
   img.onerror = (e) => {
-    console.error('[assetLoader] ❌ Failed to load legacy tileset PNG:', tilesetPngUri, e);
-    // Retry without crossOrigin
-    const retry = new Image();
-    retry.onload = () => {
-      tilesetData = {
-        image: retry,
-        objects: data.objects ?? {},
-        tileSize: data.tile_size ?? TILE_SIZE,
-      };
-      assetsReady = true;
-      console.log(`[assetLoader] ✅ Legacy tileset PNG loaded (retry, no CORS): ${retry.width}×${retry.height}`);
-    };
-    retry.onerror = (e2) => {
-      console.error('[assetLoader] ❌ Legacy tileset PNG retry also failed:', e2);
-    };
-    retry.src = tilesetPngUri;
+    console.error('[assetLoader] ❌ Failed to load legacy tileset PNG:', tilesetPngUri.slice(0, 120), e);
   };
   img.src = tilesetPngUri;
 }
@@ -302,6 +297,10 @@ function resolveUrl(relativePath: string): string {
  *
  * This populates the same `characterSheets` Map used by
  * `drawCharacterFromSheet()`, keyed by the trailing letter (A–D).
+ *
+ * Loads WITHOUT crossOrigin to avoid CORS failures in VS Code
+ * webviews.  The `removeBackground()` call may fail on the
+ * tainted canvas but its catch block falls back to the raw image.
  */
 export function loadCharacterSheetsFromUris(
   characters: Array<{ id: string; uri: string }>
@@ -316,7 +315,7 @@ export function loadCharacterSheetsFromUris(
       continue;
     }
 
-    const processImage = (img: HTMLImageElement, label: string) => {
+    const processImage = (img: HTMLImageElement) => {
       try {
         const processed = removeBackground(img);
 
@@ -339,26 +338,22 @@ export function loadCharacterSheetsFromUris(
           baseHeight,
         });
 
-        console.log(`[assetLoader] ✅ Character sheet "${key}" loaded (${label}): ${img.width}×${img.height}, ${framesPerRow}×${rows} frames, scale=${scale}`);
+        console.log(`[assetLoader] ✅ Character sheet "${key}" loaded: ${img.width}×${img.height}, ${framesPerRow}×${rows} frames, scale=${scale}`);
         assetsReady = true;
       } catch (e) {
-        console.error(`[assetLoader] ❌ Error processing character sheet "${key}" (${label}):`, e);
+        console.error(`[assetLoader] ❌ Error processing character sheet "${key}":`, e);
       }
     };
 
-    // Try with crossOrigin first (enables removeBackground pixel access)
+    // No crossOrigin — avoids CORS failures in VS Code webviews.
+    // removeBackground() may fail to getImageData() on the tainted
+    // canvas, but its catch block falls back to the raw image drawn
+    // on the canvas (character visible with background, not circles).
     const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => processImage(img, 'CORS');
-    img.onerror = () => {
-      // Retry without crossOrigin — image will load but canvas may be tainted
-      console.warn(`[assetLoader] Character sheet "${key}" CORS load failed, retrying without crossOrigin`);
-      const retry = new Image();
-      retry.onload = () => processImage(retry, 'no-CORS');
-      retry.onerror = (e) => {
-        console.error(`[assetLoader] ❌ Character sheet "${key}" failed to load entirely:`, uri.slice(0, 80), e);
-      };
-      retry.src = uri;
+    trackImage(img);
+    img.onload = () => processImage(img);
+    img.onerror = (e) => {
+      console.error(`[assetLoader] ❌ Character sheet "${key}" failed to load:`, uri.slice(0, 80), e);
     };
     img.src = uri;
   }

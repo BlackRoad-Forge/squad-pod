@@ -20,6 +20,7 @@ import {
   setTilesetMetadata,
   setLegacyTilesetAssets,
   loadCharacterSheetsFromUris,
+  areAssetsReady,
 } from '../office/sprites/assetLoader.js';
 
 const MAX_TELEMETRY_EVENTS = 200;
@@ -311,6 +312,10 @@ export function useExtensionMessages(
           if (characters && Array.isArray(characters)) {
             console.log('[useExtensionMessages] characterAssetsLoaded received:', characters.length, 'sheets');
             loadCharacterSheetsFromUris(characters);
+            // Diagnostic: verify images actually loaded after a delay
+            setTimeout(() => {
+              console.log('[useExtensionMessages] ⏱️ Asset check (3s after characterAssetsLoaded): areAssetsReady()=' + areAssetsReady());
+            }, 3000);
           }
           break;
         }

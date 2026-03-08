@@ -60,6 +60,7 @@ let _loggedPngReady = false;
 let _loggedPngFallback = false;
 let _loggedCharPng = false;
 let _loggedCharFallback = false;
+let _loggedFirstRender = false;
 
 export function renderTileGrid(
   ctx: CanvasRenderingContext2D,
@@ -72,6 +73,11 @@ export function renderTileGrid(
 ): void {
   const rows = tileMap.length;
   const pngReady = areAssetsReady();
+
+  if (!_loggedFirstRender) {
+    _loggedFirstRender = true;
+    console.log('[renderer] First tile render, areAssetsReady()=' + pngReady);
+  }
 
   if (pngReady && !_loggedPngReady) {
     _loggedPngReady = true;
