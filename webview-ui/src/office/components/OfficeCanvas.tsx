@@ -6,7 +6,6 @@ import { startGameLoop } from '../engine/gameLoop.js';
 import { renderFrame } from '../engine/renderer.js';
 import { updateCharacter } from '../engine/characters.js';
 import { TILE_SIZE, CHARACTER_HIT_HALF_WIDTH, CHARACTER_HIT_HEIGHT, PAN_MARGIN_FRACTION, ZOOM_SCROLL_THRESHOLD } from '../../constants.js';
-import { loadAssets } from '../sprites/assetLoader.js';
 
 interface OfficeCanvasProps {
   officeState: OfficeState;
@@ -51,10 +50,6 @@ export function OfficeCanvas({
   const draggedFurnitureRef = useRef<{ uid: string; offsetCol: number; offsetRow: number } | null>(null);
   const hasCenteredRef = useRef(false);
   const frameCountRef = useRef(0);
-
-  // Fire-and-forget PNG asset loading — renderer gracefully
-  // falls back to inline sprites until (if) this completes.
-  useEffect(() => { loadAssets(); }, []);
 
   const screenToWorld = useCallback(
     (screenX: number, screenY: number): { col: number; row: number } => {

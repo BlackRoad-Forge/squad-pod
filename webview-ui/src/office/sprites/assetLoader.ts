@@ -366,8 +366,11 @@ export function loadAssets(): Promise<void> {
 
       assetsReady = true;
     } catch (e) {
-      console.warn('[assetLoader] PNG assets unavailable, using inline sprites:', e);
-      assetsReady = false;
+      console.warn('[assetLoader] PNG assets unavailable via URL fetch, using inline sprites:', e);
+      // Only reset if URI-based loaders haven't already loaded assets
+      if (!tilesetMetadataImage && characterSheets.size === 0 && !tilesetData) {
+        assetsReady = false;
+      }
     }
   })();
 
