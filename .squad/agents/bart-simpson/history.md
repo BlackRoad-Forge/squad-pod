@@ -487,3 +487,35 @@ Ported four self-contained HTML browser tools from pablodelucca/pixel-agents int
 - ✅ Vite build succeeds (284KB bundle)
 - ✅ TypeScript strict mode: zero errors
 - ✅ No changes to extension host code (src/)
+
+### EditorToolbar UI Component (2026-03-07)
+
+Built the complete layout editor toolbar — the missing piece that makes Edit Layout actually usable.
+
+**New File:**
+- `webview-ui/src/components/EditorToolbar.tsx` — Full side panel with 7 sections:
+  - Tool buttons (Select, Floor, Wall, Furniture, Erase, Eyedrop) with active state highlighting
+  - Floor pattern selector (7 patterns) shown when TILE_PAINT active
+  - HSB + Contrast color sliders with Colorize checkbox (floor or wall depending on tool)
+  - Furniture palette grid with inline SpritePreview canvases for each catalog entry
+  - Selection actions (Delete, Rotate) shown when furniture is selected
+  - Grid expansion controls (←↑↓→ buttons) wired to new handleExpandGrid
+  - Actions section (Save, Undo, Redo, Reset) + keyboard shortcut reference
+
+**Modified Files:**
+- `webview-ui/src/App.tsx` — Import and render EditorToolbar, pass all editor handlers as props
+- `webview-ui/src/hooks/useEditorActions.ts` — Added handleExpandGrid (expands tile map by 1 row/col with furniture/color shifting, respects 64x64 max), exposed canUndo/canRedo
+- `webview-ui/src/office/components/OfficeCanvas.tsx` — Enabled ghost border rendering (was hardcoded false), added onExpandGrid prop, wired ghost border clicks to grid expansion
+
+**Key Design Decisions:**
+- Left side panel at 220px width, positioned above BottomToolbar (bottom: 48px)
+- Dark VS Code theme (#1e1e1e bg) with inline styles only (CSP-safe, no external CSS)
+- SpritePreview component uses tiny Canvas elements with pixelated rendering for furniture thumbnails
+- Context-sensitive panels: only show relevant controls for the active tool
+- Grid expansion shifts furniture positions and tileColor keys for left/up directions
+
+**Build Verification:**
+- ✅ 124 tests pass (46 extension + 78 webview, zero regressions)
+- ✅ Vite webview build succeeds (297KB bundle)
+- ✅ Extension build succeeds
+- ✅ No changes to extension host code (src/)
