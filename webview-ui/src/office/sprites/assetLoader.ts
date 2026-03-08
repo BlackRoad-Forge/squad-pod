@@ -385,8 +385,16 @@ function resolveUrl(relativePath: string): string {
 export function loadCharacterSheetsFromUris(
   characters: Array<{ id: string; uri: string }>
 ): void {
-  console.error('[SPRITE-DEBUG] loadCharacterSheetsFromUris called with', characters.length, 'sheets');
-  characterSheets.clear();
+  console.error('[SPRITE-DEBUG] loadCharacterSheetsFromUris called with', characters.length, 'sheets, current characterSheets.size:', characterSheets.size, 'keys:', [...characterSheets.keys()]);
+
+  // If embedded characters already loaded successfully, skip the
+  // postMessage reload — new Image() is unreliable in VS Code webviews
+  // and clearing the map would wipe working sprites.
+  if (characterSheets.size > 0) {
+    console.error('[SPRITE-DEBUG] ✅ Skipping postMessage reload — embedded characters already loaded:', [...characterSheets.keys()]);
+    return;
+  }
+
   expectedCharacterSheetKeys.clear();
   loadedCharacterSheetKeys.clear();
   failedCharacterSheetKeys.clear();
@@ -574,73 +582,66 @@ async function loadEmbeddedCharactersAsync(): Promise<void> {
     const key = id.replace(/^char_employee/, '');
     if (!key) continue;
 
-    const base64 = uri.replace('data:image/png;base64,', '');
-    // Decode base64 → binary → Blob → ImageBitmap (bypasses new Image() entirely)
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: 'image/png' });
-    const bitmap = await createImageBitmap(blob);
+    try {
+      // Strategy 1: DOM-based <img> with .decode() — most reliable in browsers
+      const img = document.createElement('img');
+      img.style.display = 'none';
+      img.src = uri;
+      document.body.appendChild(img);
 
-    // Draw bitmap onto a canvas so we have an HTMLCanvasElement
-    const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const ctx2 = canvas.getContext('2d');
-    if (ctx2) {
-      ctx2.drawImage(bitmap, 0, 0);
-      storeCharacterSheet(key, bitmap.width, bitmap.height, canvas);
+      try {
+        await img.decode();
+      } catch {
+        // .decode() might not be available; wait for natural load
+        if (!img.complete) {
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error(`img load failed for ${key}`));
+          });
+        }
+      }
+
+      console.error(`[SPRITE-DEBUG] DOM img loaded for "${key}": ${img.naturalWidth}×${img.naturalHeight}`);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx2 = canvas.getContext('2d');
+      if (ctx2) {
+        ctx2.drawImage(img, 0, 0);
+        storeCharacterSheet(key, img.naturalWidth, img.naturalHeight, canvas);
+      }
+      img.remove();
+    } catch (e) {
+      console.error(`[SPRITE-DEBUG] DOM strategy failed for "${key}", trying createImageBitmap:`, e);
+
+      // Strategy 2: createImageBitmap from Blob (fallback)
+      const base64 = uri.replace('data:image/png;base64,', '');
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'image/png' });
+      const bitmap = await createImageBitmap(blob);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx2 = canvas.getContext('2d');
+      if (ctx2) {
+        ctx2.drawImage(bitmap, 0, 0);
+        storeCharacterSheet(key, bitmap.width, bitmap.height, canvas);
+      }
+      bitmap.close();
     }
-    bitmap.close();
   }
 }
 
 // Bootstrap: load embedded characters immediately.
-// Uses createImageBitmap (async but resolves in <1 frame for in-memory data).
+// Uses DOM <img> + .decode() (primary) or createImageBitmap (fallback).
 // Guarded with typeof checks so it doesn't crash in JSDOM test environments.
-if (typeof createImageBitmap === 'function' && typeof atob === 'function' && EMBEDDED_CHARACTERS.length > 0) {
+if (typeof document !== 'undefined' && typeof atob === 'function' && EMBEDDED_CHARACTERS.length > 0) {
   console.error('[SPRITE-DEBUG] loadEmbeddedCharacters: starting async load of', EMBEDDED_CHARACTERS.length, 'sheets');
   loadEmbeddedCharactersAsync()
     .then(() => console.error('[SPRITE-DEBUG] loadEmbeddedCharacters: done. characterSheets.size:', characterSheets.size, 'keys:', [...characterSheets.keys()]))
     .catch(e => console.error('[SPRITE-DEBUG] ❌ loadEmbeddedCharacters failed:', e));
-} else if (EMBEDDED_CHARACTERS.length > 0) {
-  // Fallback for environments without createImageBitmap (shouldn't happen in Electron)
-  console.error('[SPRITE-DEBUG] createImageBitmap not available, trying new Image() fallback');
-  for (const { id, uri } of EMBEDDED_CHARACTERS) {
-    const key = id.replace(/^char_employee/, '');
-    if (!key) continue;
-    try {
-      const img = new Image();
-      img.src = uri;
-      if (img.complete && img.naturalWidth > 0) {
-        // Draw to canvas WITHOUT removeBackground (already transparent)
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx2 = canvas.getContext('2d');
-        if (ctx2) {
-          ctx2.drawImage(img, 0, 0);
-          storeCharacterSheet(key, img.width, img.height, canvas);
-        }
-      } else {
-        // Last resort: async onload
-        const _img = img;
-        const _key = key;
-        trackImage(_img);
-        expectedCharacterSheetKeys.add(_key);
-        _img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = _img.width;
-          canvas.height = _img.height;
-          const ctx2 = canvas.getContext('2d');
-          if (ctx2) {
-            ctx2.drawImage(_img, 0, 0);
-            storeCharacterSheet(_key, _img.width, _img.height, canvas);
-          }
-        };
-      }
-    } catch (e) {
-      console.error(`[SPRITE-DEBUG] ❌ Image fallback failed for "${key}":`, e);
-    }
-  }
 }

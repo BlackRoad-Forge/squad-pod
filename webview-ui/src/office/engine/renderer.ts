@@ -609,4 +609,23 @@ export function renderFrame(
   }
 
   renderBubbles(ctx, characters, offsetX, offsetY, zoom);
+
+  // Visible asset diagnostic — renders on canvas so Brian can see without DevTools
+  const snapshot = getAssetLoadSnapshot();
+  ctx.save();
+  ctx.font = '11px monospace';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(0,0,0,0.7)';
+  ctx.fillRect(0, 0, 360, 30);
+  ctx.fillStyle = snapshot.characterReady ? '#0f0' : '#f44';
+  ctx.fillText(
+    `chars:${snapshot.characterSheetsLoaded.join(',')||'NONE'} tileset:${snapshot.tilesetReady?'OK':'NO'} meta:${snapshot.tilesetMetadataStatus}`,
+    4, 4
+  );
+  ctx.fillStyle = '#ff0';
+  ctx.fillText(
+    `expected:[${snapshot.characterSheetsExpected}] failed:[${snapshot.characterSheetsFailed}]`,
+    4, 16
+  );
+  ctx.restore();
 }
