@@ -529,6 +529,65 @@ Implemented EditorToolbar as a **left side panel** (220px wide) rather than a fl
 - This bug was invisible: no errors, no warnings, just silent fallback to inline sprites
 - The fix follows the existing pattern for asset loading: dynamic import + function call in the message handler
 
+---
+
+## Decision: CORS-Safe Image Loading in Webview
+
+**Author:** Lisa Simpson  
+**Date:** 2026-03-08  
+**Status:** Implemented
+
+### Context
+
+VS Code webviews run at origin `vscode-webview://[uuid]` while resources are served from `https://file+.vscode-resource.vscode-cdn.net/`. This cross-origin relationship means:
+
+1. `new Image()` loads succeed (CSP `img-src` allows it)
+2. `canvas.getImageData()` may throw `SecurityError` (canvas tainted by cross-origin image)
+3. Setting `crossOrigin="anonymous"` enables CORS but may cause the load itself to fail if the server doesn't send `Access-Control-Allow-Origin` headers
+
+### Decision
+
+All browser-side image loading in the webview must follow a **three-tier fallback** pattern:
+
+1. **Try with `crossOrigin="anonymous"`** — enables `getImageData()` for pixel manipulation (background removal)
+2. **On load error, retry WITHOUT `crossOrigin`** — image loads but canvas is tainted; pixel manipulation falls back gracefully
+3. **On pixel access error (`getImageData`), catch and use raw image** — character has visible background but renders
+
+Additionally, all `removeBackground()` / `getImageData()` calls must be wrapped in try/catch with graceful degradation.
+
+### Team Impact
+
+- **Bart (Canvas Dev):** Any new canvas pixel-manipulation code must handle `SecurityError` from `getImageData()`
+- **Lisa (Extension Dev):** Image URIs from `webview.asWebviewUri()` are cross-origin; plan accordingly
+- **All:** Never assume `getImageData()` works on images loaded from webview URIs
+
+---
+
+## Decision: Tileset Metadata Items as Placeable Furniture
+
+**Author:** Bart Simpson (Frontend Dev)  
+**Date:** 2026-03-08
+
+### Context
+
+The EditorToolbar now supports placing items from tileset-metadata.json (Electronics, Appliances, Decorations) in addition to the legacy FURNITURE_CATALOG items.
+
+### Decision
+
+Tileset metadata item IDs (e.g. `vending_machine_soda`, `pc_monitor_on`) are used directly as the furniture `type` string in `PlacedFurniture`. The rendering pipeline tries three fallbacks in order:
+
+1. **Legacy tileset** (`drawTilesetFurniture`) — uses `furnitureToTileset` mapping for old types like `desk`, `pc`
+2. **Metadata PNG** (`drawMetadataItemScaled`) — uses tileset-metadata.json bounds for new items
+3. **Inline sprite** — falls back to the SpriteData array (placeholder for metadata items)
+
+`layoutToFurnitureInstances()` also handles metadata items by looking up bounds from the asset loader when `getCatalogEntry()` returns null.
+
+### Impact
+
+- New items placed from the metadata catalog will use metadata IDs as types in saved layouts
+- Existing layouts with legacy types (`desk`, `chair`, etc.) continue to work unchanged
+- Any agent adding new tileset items to tileset-metadata.json will see them automatically appear in the editor toolbar under their category
+
 #### Recommendation
 
 When adding new message types to `OutboundMessage`, treat the handler in `useExtensionMessages.ts` as a mandatory counterpart. Consider adding a lint rule or code review checklist item to catch missing handlers.

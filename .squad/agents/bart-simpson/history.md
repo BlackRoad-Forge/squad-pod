@@ -472,6 +472,27 @@ Ported four self-contained HTML browser tools from pablodelucca/pixel-agents int
 
 **Build Verification:**
 - ✅ 78 webview tests pass (vitest)
+
+### EditorToolbar Tile Categories Expansion (2026-03-08)
+
+**Task:** Enhance EditorToolbar to render all 6 tileset tile categories (Floor, Wall, Furniture, Electronics, Appliances, Decorations) with canvas-rendered sprite previews.
+
+**Achievements:**
+- **Category Tabs:** UI tabs for Floor, Wall, Furniture, Electronics, Appliances, Decorations
+- **Canvas-Rendered Previews:** Each tile/item renders via Canvas 2D with three-stage fallback
+  - Stage 1: Legacy tileset coordinates (Floor/Wall/Furniture)
+  - Stage 2: Metadata PNG bounds (Electronics/Appliances/Decorations)
+  - Stage 3: Inline sprite array fallback
+- **Asset Integration:** Furniture asset pipeline fully integrated with EditorToolbar — asset loader provides tileset + metadata assets
+
+**Key Files Modified:**
+- `webview-ui/src/components/EditorToolbar.tsx` — Category tabs + canvas renderer
+- `webview-ui/src/office/renderer.ts` — Added `drawMetadataItemScaled()` and `drawTilesetItem()` helpers
+- `webview-ui/src/hooks/useAssetLoader.ts` — Metadata and tileset asset loading
+
+**Decision:** Tileset Metadata Items as Placeable Furniture — codifies metadata item IDs as furniture types in PlacedFurniture, with three-stage rendering fallback cascade for legacy + new items.
+
+**Commit:** b457e74
 - ✅ Vite build succeeds (283KB bundle)
 - ✅ TypeScript strict mode: zero errors
 - ✅ No changes to extension host code (src/)

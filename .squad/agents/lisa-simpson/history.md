@@ -345,6 +345,10 @@ The build output is correct (dist/assets/ has all PNGs, metadata JSONs, single V
 **Diagnostic Logging Added:**
 - Extension host: logs assetsDir path, webview URIs, file existence checks, message sends
 - Webview assetLoader: logs each stage with ✅/❌ indicators, image dimensions, assetsReady transitions
+
+**Commits:** 6932ab2
+
+**Decision:** CORS-Safe Image Loading in Webview — codifies three-tier fallback pattern (try with crossOrigin, retry without, graceful pixel-access error handling) as team standard for all image loading and pixel manipulation in webview.
 - Webview renderer: one-time logs when PNG rendering first activates or falls back (no 60fps spam)
 - Webview renderer: one-time warning if `areAssetsReady()=true` but `drawTilesetTile()` returns false
 
