@@ -28,6 +28,17 @@ Established dual-build infrastructure (esbuild + Vite), TypeScript interfaces fo
 
 ## Learnings
 
+### Image Loading in VS Code Webviews — The Real Fix (2026-03-08)
+
+**Problem:** PNG tileset and character sprite sheets never rendered — the renderer permanently fell back to colored rectangles/circles despite all prior fixes (dynamic→static imports, eager loadAssets removal, CORS retry).
+
+**Root Causes Found:**
+1. **`crossOrigin='anonymous'` is unreliable in VS Code webviews.** The vscode-resource server does not consistently send CORS headers. Setting crossOrigin causes the browser to make a CORS preflight request which fails, triggering onerror. The retry (without crossOrigin) could also fail due to browser response caching. **Fix:** Removed `crossOrigin='anonymous'` from ALL image loads. Tilesets only need `drawImage()` which works on tainted canvases. Character `removeBackground()` already has a catch block for SecurityError that falls back to raw image on canvas.
+
+2. **Image objects created as local variables are vulnerable to garbage collection.** Five 4-5MB character sheets plus tileset images = 7+ simultaneous in-flight Image loads. Local `const img = new Image()` objects go out of scope when the loading function returns. Under memory pressure, the browser may GC them before `onload` fires — causing silent load failure (neither onload nor onerror fires). **Fix:** Added module-level `_pendingImages` Set that holds strong references to Image objects until their load/error event completes.
+
+**Key Insight:** Never use `crossOrigin` in VS Code webviews unless you actually need pixel-level access AND have verified CORS works. For `ctx.drawImage()` rendering, tainted canvases are perfectly fine.
+
 ### No-Workspace Handling (2026-03-07)
 
 **Problem:** When no workspace folder is open in VS Code, Squad Pod webview gets stuck showing "Loading office..." forever because the extension host returns early from `onWebviewReady()` without sending any message, leaving the webview waiting indefinitely for `layoutLoaded`.
