@@ -18,6 +18,52 @@
 
 ## Learnings
 
+### Sprite Rendering Nuclear Fix: Cache-Busting + Synchronous RGBA (2025-01-22)
+
+Fixed character sprites rendering as colored rectangles after 7+ failed attempts. The root causes were webview caching and unreliable async Image loading in Electron.
+
+**Fix 1 — Webview Cache Busting:**
+- VS Code's Electron webview was serving cached JS/CSS from previous builds
+- Previous sprite fixes (removeBackground skip, code-splitting fix, dual strategies) never took effect
+- Added timestamp query parameter to script/CSS URIs in `_getHtmlForWebview()`: `?v=${Date.now()}`
+- Forces fresh load on every panel creation — cache can't hide broken/fixed code anymore
+
+**Fix 2 — Synchronous Embedded Character Loading:**
+- ALL async image loading approaches failed in VS Code Electron: new Image().onload, createImageBitmap, img.decode()
+- Solution: Pre-decode PNGs to raw RGBA at build time, embed raw pixel data, use putImageData() (100% synchronous)
+- Updated `gen_embedded_chars.py` to use PIL for PNG→RGBA conversion and base64-encode raw pixels
+- Bootstrap code in `assetLoader.ts` now uses atob() → Uint8ClampedArray → ImageData → putImageData()
+- characterSheets Map populated at module init time BEFORE any other code runs — zero async dependencies
+
+**Implementation Details:**
+- `gen_embedded_chars.py` outputs: `{ id, width, height, rgbaBase64 }` for each sprite sheet
+- 224×128 PNG = 114,688 bytes RGBA per sprite → ~153KB base64 per sprite
+- Bundle size: 375KB → 611KB (acceptable for reliability — no more colored rectangles!)
+- Bootstrap code guarded with `typeof document !== 'undefined'` for JSDOM test compatibility
+- `loadCharacterSheetsFromUris()` still skips if characterSheets.size > 0 (preserves embedded data)
+
+**Key Lessons:**
+- **Cache is a silent killer in webview development** — always use cache-busting for script/CSS URIs during active development
+- **Electron webview Image loading is fundamentally unreliable** — onload may never fire, even for data URIs
+- **Synchronous > Async for critical bootstrap code** — putImageData guarantees the data is there before first frame
+- **Build-time decode > Runtime decode** — move complexity to Python script, keep browser code simple and synchronous
+- **Test in real environment early** — all the async strategies worked in Chrome DevTools but failed in VS Code
+
+**Files Modified:**
+- `src/SquadPodViewProvider.ts` — added cacheBuster timestamp to script/CSS URIs
+- `scripts/gen_embedded_chars.py` — PIL decode PNG→RGBA, base64 encode raw bytes
+- `webview-ui/src/office/sprites/embeddedCharacters.ts` — regenerated with RGBA data (306KB)
+- `webview-ui/src/office/sprites/assetLoader.ts` — removed all async bootstrap code, replaced with sync putImageData
+
+**Build Verification:**
+- ✅ All 124 tests pass (46 extension + 78 webview)
+- ✅ `Select-String "putImageData"` confirms sync code in bundle
+- ✅ TypeScript strict mode clean
+- ✅ Bundle size acceptable (611KB vs 375KB — worth it for reliability)
+
+**Architecture Decision:**
+This is Decision §18 material — "Never use async Image loading for critical bootstrap assets in VS Code webviews. Use raw RGBA + putImageData for synchronous guaranteed loading." The cache-busting pattern should be standard for all webview script/CSS URIs during development.
+
 ### Editor Bug Fixes: Exit Button + Floor Painting (2025-07-24)
 
 Fixed two bugs in the layout editor:
