@@ -278,3 +278,13 @@ Established dual-build infrastructure (esbuild + Vite), TypeScript interfaces fo
 **Commit:** 3906f88 — Character asset loading webview handler — fix missing message case for custom sprite sheets
 
 **Pattern Established:** When adding new `OutboundMessage` variants to the discriminated union in `src/types.ts`, always add corresponding handler in `webview-ui/src/hooks/useExtensionMessages.ts`. Silent fallback in default case makes unhandled messages invisible to debugging.
+
+### EditorToolbar UI Build (2026-03-08)
+
+**Task:** Bart spawned to build EditorToolbar left-side panel UI for layout editor.
+
+**Session:** Bart Simpson completed the EditorToolbar component with tool buttons, HSB color sliders, furniture palette, grid expansion, and undo/redo/save. All 124 tests pass, both builds clean. Commit: 70cd542.
+
+**Outcome:** SUCCESS — Full editor functionality now accessible via UI. The toolbar integrates seamlessly with the EditorState infrastructure, furnishing the visual interface for layout editing workflows. Ghost borders enable interactive grid expansion.
+
+**Team Impact:** Any new EditTool variants added to types.ts should also be added to TOOL_DEFS in EditorToolbar.tsx for consistent UI mapping.
