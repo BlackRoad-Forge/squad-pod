@@ -273,29 +273,33 @@ export function loadCharacterSheetsFromUris(
 
     const img = new Image();
     img.onload = () => {
-      const processed = removeBackground(img);
+      try {
+        const processed = removeBackground(img);
 
-      const rows = 4;
-      const frameHeight = img.height / rows;
-      const scale = Math.round(frameHeight / TILE_SIZE);
-      const baseHeight = Math.round(frameHeight / scale);
-      const framesPerRow = img.width % 7 === 0 ? 7 : Math.round(img.width / (baseHeight * scale * (img.width / img.height)));
-      const frameWidth = Math.round(img.width / (framesPerRow || 7));
-      const baseWidth = Math.round(frameWidth / scale);
+        const rows = 4;
+        const frameHeight = img.height / rows;
+        const scale = Math.round(frameHeight / TILE_SIZE);
+        const baseHeight = Math.round(frameHeight / scale);
+        const framesPerRow = img.width % 7 === 0 ? 7 : Math.round(img.width / (baseHeight * scale * (img.width / img.height)));
+        const frameWidth = Math.round(img.width / (framesPerRow || 7));
+        const baseWidth = Math.round(frameWidth / scale);
 
-      characterSheets.set(key, {
-        image: processed,
-        frameWidth,
-        frameHeight,
-        framesPerRow: framesPerRow || 7,
-        rows,
-        scale,
-        baseWidth,
-        baseHeight,
-      });
+        characterSheets.set(key, {
+          image: processed,
+          frameWidth,
+          frameHeight,
+          framesPerRow: framesPerRow || 7,
+          rows,
+          scale,
+          baseWidth,
+          baseHeight,
+        });
 
-      console.log(`[assetLoader] Character sheet "${key}" loaded: ${img.width}×${img.height}, ${framesPerRow}×${rows} frames, scale=${scale}`);
-      assetsReady = true;
+        console.log(`[assetLoader] Character sheet "${key}" loaded: ${img.width}×${img.height}, ${framesPerRow}×${rows} frames, scale=${scale}`);
+        assetsReady = true;
+      } catch (e) {
+        console.warn(`[assetLoader] Error processing character sheet "${key}":`, e);
+      }
     };
     img.onerror = () => {
       console.warn(`[assetLoader] Failed to load character sheet "${key}" from:`, uri);

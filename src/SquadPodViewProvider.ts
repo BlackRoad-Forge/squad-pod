@@ -581,6 +581,7 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
     script-src 'nonce-${nonce}';
     img-src ${webview.cspSource} data:;
     font-src ${webview.cspSource};
+    connect-src ${webview.cspSource};
   " />
   <link rel="stylesheet" href="${styleUri}" />
   <title>Squad Pod</title>

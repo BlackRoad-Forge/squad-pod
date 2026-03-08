@@ -5,6 +5,23 @@ import { vscode } from '../vscodeApi.js';
 import type { AgentDetailInfo } from '../components/AgentCard.js';
 import type { SquadInfoData } from '../components/SquadInfoCard.js';
 
+// Static imports — dynamic import() creates code-split chunks in Vite whose
+// module-level state is isolated from the main bundle.  That means calling
+// e.g. setFloorSprites on the chunk's copy has NO effect on the renderer's
+// copy imported statically in renderer.ts.  Static imports guarantee a single
+// module instance shared across the entire bundle.
+import { setCharacterTemplates } from '../office/sprites/defaultCharacters.js';
+import { buildDynamicCatalog } from '../office/layout/furnitureCatalog.js';
+import { setFloorSprites } from '../office/floorTiles.js';
+import { setWallSprites } from '../office/wallTiles.js';
+import {
+  setAssetBaseUrl,
+  loadAssets,
+  setTilesetMetadata,
+  setLegacyTilesetAssets,
+  loadCharacterSheetsFromUris,
+} from '../office/sprites/assetLoader.js';
+
 const MAX_TELEMETRY_EVENTS = 200;
 
 export interface ExtensionMessageState {
@@ -235,33 +252,25 @@ export function useExtensionMessages(
 
         case 'characterSpritesLoaded': {
           const { sprites } = message;
-          import('../office/sprites/defaultCharacters.js').then(({ setCharacterTemplates }) => {
-            setCharacterTemplates(sprites);
-          });
+          setCharacterTemplates(sprites);
           break;
         }
 
         case 'furnitureAssetsLoaded': {
           const { catalog: _catalog, sprites: _sprites } = message;
-          import('../office/layout/furnitureCatalog.js').then(({ buildDynamicCatalog }) => {
-            buildDynamicCatalog();
-          });
+          buildDynamicCatalog();
           break;
         }
 
         case 'floorTilesLoaded': {
           const tiles = message.tiles ?? message.sprites;
-          import('../office/floorTiles.js').then(({ setFloorSprites }) => {
-            setFloorSprites(tiles);
-          });
+          setFloorSprites(tiles);
           break;
         }
 
         case 'wallTilesLoaded': {
           const tiles = message.tiles ?? message.sprites;
-          import('../office/wallTiles.js').then(({ setWallSprites }) => {
-            setWallSprites(tiles);
-          });
+          setWallSprites(tiles);
           break;
         }
 
@@ -272,10 +281,8 @@ export function useExtensionMessages(
         case 'assetBaseUrl': {
           const { url } = message;
           if (url) {
-            import('../office/sprites/assetLoader.js').then(({ setAssetBaseUrl, loadAssets }) => {
-              setAssetBaseUrl(url);
-              loadAssets();
-            });
+            setAssetBaseUrl(url);
+            loadAssets();
           }
           break;
         }
@@ -284,9 +291,7 @@ export function useExtensionMessages(
           const { metadata, tilesetPngUri } = message;
           if (metadata && tilesetPngUri) {
             console.log('[useExtensionMessages] tilesetMetadataLoaded received:', metadata.items?.length, 'items');
-            import('../office/sprites/assetLoader.js').then(({ setTilesetMetadata }) => {
-              setTilesetMetadata(metadata, tilesetPngUri);
-            });
+            setTilesetMetadata(metadata, tilesetPngUri);
           }
           break;
         }
@@ -295,9 +300,7 @@ export function useExtensionMessages(
           const { tilesetData, tilesetPngUri } = message;
           if (tilesetData && tilesetPngUri) {
             console.log('[useExtensionMessages] tilesetAssetsLoaded received');
-            import('../office/sprites/assetLoader.js').then(({ setLegacyTilesetAssets }) => {
-              setLegacyTilesetAssets(tilesetData as { tile_size?: number; objects: Record<string, { x: number; y: number; w: number; h: number }> }, tilesetPngUri as string);
-            });
+            setLegacyTilesetAssets(tilesetData as { tile_size?: number; objects: Record<string, { x: number; y: number; w: number; h: number }> }, tilesetPngUri as string);
           }
           break;
         }
@@ -306,9 +309,7 @@ export function useExtensionMessages(
           const { characters } = message;
           if (characters && Array.isArray(characters)) {
             console.log('[useExtensionMessages] characterAssetsLoaded received:', characters.length, 'sheets');
-            import('../office/sprites/assetLoader.js').then(({ loadCharacterSheetsFromUris }) => {
-              loadCharacterSheetsFromUris(characters);
-            });
+            loadCharacterSheetsFromUris(characters);
           }
           break;
         }
