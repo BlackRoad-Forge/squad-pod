@@ -376,3 +376,34 @@ Completed integration of char_employeeE sprite sheet as background task via Copi
 - Committed as 655c7d3 with full asset pipeline validation
 
 **Outcome:** ✅ SUCCESS — Character roster now includes Employee E. Decision reference: `.squad/decisions.md` § 16 (non-standard sprite sheet recomposition pattern).
+
+### Asset Loading Race Condition — loadAssets() vs URI-based Loaders (2026-03-08)
+
+**Problem:** Tileset PNG tiles and character sprite sheets were NOT rendering at runtime. The webview showed fallback colored rectangles for tiles and inline pixel-art sprites for characters, despite the PNG asset pipeline (commit bc07a60 for tileset, commit 3906f88 for characters) being correctly wired end-to-end.
+
+**Root Cause:** `OfficeCanvas.tsx` called `loadAssets()` on mount via `useEffect`. This function uses `fetch()` to load `tileset.json` via relative URL resolution. In the VS Code webview, CSP has `default-src 'none'` with no `connect-src` directive, so `fetch()` always fails. The `catch` block then set `assetsReady = false`, overriding the `true` value already set by the URI-based loaders (`setTilesetMetadata()`, `loadCharacterSheetsFromUris()`) that receive webview-safe URIs from the extension host via `postMessage`.
+
+**Race timeline:**
+1. OfficeCanvas mounts → `loadAssets()` starts async fetch
+2. Extension host sends `tilesetMetadataLoaded` / `characterAssetsLoaded` messages
+3. URI-based loaders create `new Image()` with webview URIs → images load → `assetsReady = true`
+4. `loadAssets()` fetch fails (CSP blocks it) → `assetsReady = false` ← **overwrites the true**
+5. Render loop checks `areAssetsReady()` → `false` → draws colored fallback forever
+
+**Fix:**
+- Removed `loadAssets()` call from `OfficeCanvas.tsx` — the extension host URI-based loading path is the correct one for VS Code webviews
+- Guarded the `catch` block in `loadAssets()` to only reset `assetsReady` if no URI-based loader has already succeeded (checks `tilesetMetadataImage`, `characterSheets.size`, `tilesetData`)
+
+**Key File Changes:**
+- `webview-ui/src/office/components/OfficeCanvas.tsx` — Removed `loadAssets()` import and `useEffect` call
+- `webview-ui/src/office/sprites/assetLoader.ts` — Guarded catch block against resetting URI-loaded assets
+
+**Pattern:** In VS Code webviews, never use `fetch()` for local assets — CSP blocks it. Always use the extension host → webview URI pipeline (`webview.asWebviewUri()` → `postMessage` → `new Image().src = uri`). When multiple loading paths exist for the same shared flag, ensure later failures don't clobber earlier successes.
+
+**Test Results:** All 124 tests pass, both builds clean.
+
+**Decision Added:** `.squad/decisions.md` § 16 — No fetch() in Webview — CSP Constraint (architectural rationale + constraint enforcement).
+
+**Status:** ✅ COMPLETED (2026-03-08T05:05)
+
+**Commit:** 5e6c42f — Remove CSP-blocked fetch() from webview asset loader

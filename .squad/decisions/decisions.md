@@ -228,3 +228,43 @@ npm run build:webview      # Vite build (called separately when needed)
 - **Marge (Tests):** Extension tests use `dist/extension.js`, webview tests use Vite test mode
 - **Ned (Docs):** Build instructions are straightforward (`npm install` → `npm run build`)
 - **Homer (Coordinator):** Two build targets, but both "just work" via npm scripts
+
+---
+
+## Squad Pod: No fetch() in Webview — CSP Constraint
+
+**Decision Date:** 2026-03-08  
+**Author:** Lisa Simpson (Core Dev)  
+**Status:** Implemented
+
+### Context
+
+The VS Code webview CSP has `default-src 'none'` with no `connect-src` directive. This means `fetch()` and `XMLHttpRequest` calls are always blocked. The `loadAssets()` function in `assetLoader.ts` used `fetch()` to load tileset JSON, which silently failed and reset the `assetsReady` flag to `false`, breaking PNG rendering even though URI-based loaders had already succeeded.
+
+### Decision
+
+**Never use `fetch()` for local asset loading in the webview.** All local assets (tileset PNGs, character sprite sheets, JSON metadata) must be loaded via the extension host → webview URI pipeline:
+
+1. Extension host reads files from `dist/assets/`
+2. Extension host converts paths to webview URIs via `webview.asWebviewUri()`
+3. Extension host sends URIs to webview via `postMessage`
+4. Webview loads images with `new Image().src = uri` (governed by `img-src` CSP, not `connect-src`)
+
+### Consequences
+
+#### Positive
+
+- All assets flow through a single, predictable URI pipeline
+- No CSP-blocked requests silently failing and breaking state
+- Clear separation of concerns: extension provides URIs, webview renders them
+
+#### Negative
+
+- `loadAssets()` in `assetLoader.ts` is now unreachable dead code (removed the call from OfficeCanvas mount)
+- Must always coordinate asset loading through the extension's `postMessage` protocol
+
+### Team Impact
+
+- **Lisa (Core Dev):** Maintain asset URI pipeline in `SquadPodViewProvider.ts`
+- **Bart (Canvas Dev):** Never call `fetch()` in webview; all assets come from `postMessage`
+- **Future devs:** Document this constraint in PR reviews for webview changes
