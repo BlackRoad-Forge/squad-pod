@@ -331,8 +331,8 @@ export function loadAssets(): Promise<void> {
         tileSize: tilesetJson.tile_size ?? TILE_SIZE,
       };
 
-      // Load all 4 character sprite sheets in parallel
-      const charKeys = ['A', 'B', 'C', 'D'];
+      // Load all character sprite sheets in parallel
+      const charKeys = ['A', 'B', 'C', 'D', 'E'];
       const charImages = await Promise.all(
         charKeys.map(key =>
           loadImage(resolveUrl(`assets/characters/char_employee${key}.png`))

@@ -24,8 +24,8 @@ const DIRECTION_TO_ROW: Record<Direction, number> = {
   [Direction.LEFT]: 3,
 };
 
-/** Map palette index (0-5) to character sheet key (A-D). */
-const PALETTE_TO_SHEET: string[] = ['A', 'B', 'C', 'D', 'A', 'B'];
+/** Map palette index (0-5) to character sheet key (A-E). */
+const PALETTE_TO_SHEET: string[] = ['A', 'B', 'C', 'D', 'E', 'A'];
 
 /**
  * Try to draw a character frame from a PNG sprite sheet.
