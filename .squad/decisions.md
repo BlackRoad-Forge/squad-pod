@@ -531,3 +531,78 @@ User request — captured for team memory and decision context.
 - All meaningful changes require team consensus
 - Document architectural decisions here
 - Keep history focused on work, decisions focused on direction
+
+### 13. Tileset Metadata Integration — Prefer Rich Format with Legacy Fallback
+
+**Author:** Lisa Simpson (Core Dev)
+**Date:** 2026-03-08
+**Status:** Implemented
+
+#### Context
+
+The tileset asset pipeline now produces two JSON files:
+- \	ileset.json\ — 12 objects, flat \{x,y,w,h}\ regions, no categorization
+- \	ileset-metadata.json\ — 18 items with type categories, structured bounds, interactables
+
+The webview needs richer data (item types for rendering layers, interactables for player actions) but existing renderers still reference the legacy \getTilesetData()\ API.
+
+#### Decision
+
+**Prefer tileset-metadata.json; fall back to tileset.json.**
+
+1. Extension host tries \	ileset-metadata.json\ first → sends \	ilesetMetadataLoaded\ message
+2. If missing or malformed, falls back to \	ileset.json\ → sends \	ilesetAssetsLoaded\ (unchanged)
+3. Webview's \setTilesetMetadata()\ also populates the legacy \	ilesetData\ object so all existing renderers continue working without changes
+
+#### Consequences
+
+**Positive:**
+- Renderers can query items by type (\getItemsByType('furniture')\) for layered rendering
+- Interactables are first-class data — no hardcoded action mappings needed
+- Zero breaking changes: legacy code path untouched, legacy accessors still work
+
+**Negative:**
+- Two parallel metadata formats to maintain (until legacy tileset.json is fully retired)
+- Webview duplicates type definitions from extension host (no shared package yet)
+
+#### Team Impact
+
+- **Bart (HTML Tools):** Can use \getItemById()\, \getItemsByType()\, \getInteractables()\ in renderers — no need to look up objects by string key anymore
+- **All:** New OutboundMessage variant \	ilesetMetadataLoaded\ — add a case if you handle messages exhaustively
+
+### 14. Tileset Metadata Rendering Pipeline
+
+**Author:** Bart Simpson (Frontend Dev)
+**Date:** 2026-03-08
+**Status:** Implemented
+
+#### Context
+
+The tileset-metadata.json introduces a richer format with typed items (floor/wall/furniture/electronics/appliance/decoration), precise pixel bounds, and interactable definitions. This supersedes the legacy tileset.json object map for new items while maintaining backward compat.
+
+#### Decision
+
+Three new modules consume the metadata:
+
+1. **tilesetRenderer.ts** — Added \drawMetadataItem()\ and \drawMetadataItemScaled()\ for metadata-driven rendering. Legacy \drawTilesetFurniture()\ untouched. Rendering looks up items via \getItemById()\ from assetLoader (Lisa's domain), keeping loading/rendering cleanly separated.
+
+2. **collision.ts** — Stateless functions that classify item types as blocking or walkable. Multi-tile items (e.g., 48×32 desk = 3×2 tiles) correctly occupy all grid cells via \Math.ceil(bounds / TILE_SIZE)\. Integrates with existing \lockedTiles: Set<string>\ via \mergeBlockedTiles()\.
+
+3. **interactables.ts** — \InteractableRegistry\ class with load/query lifecycle. Maps item_id→action from metadata. Spatial queries find adjacent interaction points and nearby interactables for characters.
+
+#### Consequences
+
+- **Forward path clear:** Future items just need a metadata entry — no code changes for rendering/collision
+- **Backward compat preserved:** Old furnitureCatalog.ts sprites still render when metadata isn't loaded
+- **Team impact:** Lisa's assetLoader provides the data; Bart's modules consume it. Marge can unit-test collision/interactables without Canvas mocks (pure logic).
+
+### 15. User Directive: Tileset Metadata Integration (2026-03-08T03:21)
+
+**From:** Brian Swiger (via Copilot)
+**Status:** Captured for team memory
+
+Integrate tileset-metadata.json as the primary metadata source for office assets. The metadata defines 18 items (floors, walls, furniture, electronics, appliances, decorations) with precise pixel bounds from tileset_office.png. The renderer must use bounds (x, y, width, height) to clip sprites. All dimensions must be multiples of 16. Interactables (vending_machine_soda, coffee_maker_carafe, pc_monitor_on) must map to character states. Type field (furniture, appliance, etc.) generates collision maps. This bypasses the import-tileset pipeline — metadata is manually registered.
+
+#### Rationale
+
+User request — captured for team memory.
