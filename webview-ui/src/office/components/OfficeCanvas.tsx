@@ -19,6 +19,7 @@ interface OfficeCanvasProps {
   onDeleteSelected?: () => void;
   onRotateSelected?: () => void;
   onDragMove?: (uid: string, newCol: number, newRow: number) => void;
+  onExpandGrid?: (direction: 'left' | 'right' | 'up' | 'down') => void;
   editorTick: number;
   zoom: number;
   onZoomChange?: (zoom: number) => void;
@@ -35,6 +36,7 @@ export function OfficeCanvas({
   onEditorEraseAction,
   onEditorSelectionChange,
   onDragMove,
+  onExpandGrid,
   zoom,
   onZoomChange,
   panRef,
@@ -156,7 +158,7 @@ export function OfficeCanvas({
           panRef.current!.x,
           panRef.current!.y,
           null,
-          isEditMode ? { showGrid: true, showGhostBorder: false, ghostHoverCol: null, ghostHoverRow: null } : undefined,
+          isEditMode ? { showGrid: true, showGhostBorder: true, ghostHoverCol: officeState.hoveredTile?.col ?? null, ghostHoverRow: officeState.hoveredTile?.row ?? null } : undefined,
           tileColorsMap,
           officeState.layout.cols,
           officeState.layout.rows,
@@ -189,6 +191,16 @@ export function OfficeCanvas({
       const { col, row } = screenToWorld(screenX, screenY);
 
       if (isEditMode) {
+        // Ghost border click → expand grid
+        const { cols: lCols, rows: lRows } = officeState.layout;
+        if (onExpandGrid && (col < 0 || col >= lCols || row < 0 || row >= lRows)) {
+          if (col < 0) onExpandGrid('left');
+          else if (col >= lCols) onExpandGrid('right');
+          else if (row < 0) onExpandGrid('up');
+          else if (row >= lRows) onExpandGrid('down');
+          return;
+        }
+
         if (editorState.tool === 'select') {
           let selectedUid: string | null = null;
           for (const furn of officeState.furniture) {
@@ -271,6 +283,7 @@ export function OfficeCanvas({
       onEditorTileAction,
       onEditorEraseAction,
       onEditorSelectionChange,
+      onExpandGrid,
       zoom,
       panRef,
       onDeskClick,

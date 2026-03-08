@@ -10,6 +10,7 @@ import { DebugView } from './components/DebugView.js';
 import { AgentCard } from './components/AgentCard.js';
 import { SquadInfoCard } from './components/SquadInfoCard.js';
 import { TelemetryDrawer } from './components/TelemetryDrawer.js';
+import { EditorToolbar } from './components/EditorToolbar.js';
 import { EditorState } from './office/editor/editorState.js';
 import { useExtensionMessages } from './hooks/useExtensionMessages.js';
 import { useEditorActions } from './hooks/useEditorActions.js';
@@ -145,11 +146,33 @@ export default function App() {
         onDeleteSelected={editor.handleDeleteSelected}
         onRotateSelected={editor.handleRotateSelected}
         onDragMove={editor.handleDragMove}
+        onExpandGrid={editor.handleExpandGrid}
         editorTick={editor.editorTick}
         zoom={editor.zoom}
         onZoomChange={editor.handleZoomChange}
         panRef={editor.panRef}
         onDeskClick={handleDeskClick}
+      />
+
+      <EditorToolbar
+        editorState={editorState}
+        isEditMode={editor.isEditMode}
+        onToolChange={editor.handleToolChange}
+        onTileTypeChange={editor.handleTileTypeChange}
+        onFloorColorChange={editor.handleFloorColorChange}
+        onWallColorChange={editor.handleWallColorChange}
+        onFurnitureTypeChange={editor.handleFurnitureTypeChange}
+        onSave={editor.handleSave}
+        onReset={editor.handleReset}
+        onUndo={editor.handleUndo}
+        onRedo={editor.handleRedo}
+        onDeleteSelected={editor.handleDeleteSelected}
+        onRotateSelected={editor.handleRotateSelected}
+        canUndo={editor.canUndo}
+        canRedo={editor.canRedo}
+        isDirty={editor.isDirty}
+        hasSelection={editorState.selectedFurnitureUid !== null}
+        onExpandGrid={editor.handleExpandGrid}
       />
 
       <ZoomControls zoom={editor.zoom} onZoomChange={editor.handleZoomChange} />

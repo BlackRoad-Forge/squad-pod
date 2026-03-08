@@ -4,7 +4,7 @@ import type { EditorState } from '../office/editor/editorState.js';
 import { EditTool } from '../office/types.js';
 import type { TileType, FloorColor, OfficeLayout } from '../office/types.js';
 import { applyTilePaint, applyErase, applyFurniturePlace } from '../office/editor/editorActions.js';
-import { ZOOM_DEFAULT_DPR_FACTOR, ZOOM_MIN, ZOOM_MAX, UNDO_STACK_MAX_SIZE } from '../constants.js';
+import { ZOOM_DEFAULT_DPR_FACTOR, ZOOM_MIN, ZOOM_MAX, UNDO_STACK_MAX_SIZE, MAX_COLS, MAX_ROWS } from '../constants.js';
 import { vscode } from '../vscodeApi.js';
 
 export function useEditorActions(getOfficeState: () => OfficeState, editorState: EditorState) {
@@ -201,6 +201,62 @@ export function useEditorActions(getOfficeState: () => OfficeState, editorState:
     [getOfficeState]
   );
 
+  const handleExpandGrid = useCallback(
+    (direction: 'left' | 'right' | 'up' | 'down') => {
+      const officeState = getOfficeState();
+      const layout = JSON.parse(JSON.stringify(officeState.getLayout())) as OfficeLayout;
+      const { cols, rows } = layout;
+
+      if (direction === 'left' || direction === 'right') {
+        if (cols >= MAX_COLS) return;
+      } else {
+        if (rows >= MAX_ROWS) return;
+      }
+
+      pushUndo();
+      const newCols = (direction === 'left' || direction === 'right') ? cols + 1 : cols;
+      const newRows = (direction === 'up' || direction === 'down') ? rows + 1 : rows;
+
+      const oldTiles = layout.tiles;
+      const newTiles: number[] = new Array(newCols * newRows).fill(8); // VOID
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const destR = direction === 'up' ? r + 1 : r;
+          const destC = direction === 'left' ? c + 1 : c;
+          newTiles[destR * newCols + destC] = oldTiles[r * cols + c];
+        }
+      }
+
+      layout.cols = newCols;
+      layout.rows = newRows;
+      layout.tiles = newTiles;
+
+      // Shift furniture positions for left/up expansion
+      if (direction === 'left') {
+        for (const f of layout.furniture) f.col += 1;
+      } else if (direction === 'up') {
+        for (const f of layout.furniture) f.row += 1;
+      }
+
+      // Shift tile color keys for left/up expansion
+      if (layout.tileColors && (direction === 'left' || direction === 'up')) {
+        const newColors: Record<string, FloorColor> = {};
+        for (const [key, val] of Object.entries(layout.tileColors)) {
+          const [c, r] = key.split(',').map(Number);
+          const nc = direction === 'left' ? c + 1 : c;
+          const nr = direction === 'up' ? r + 1 : r;
+          newColors[`${nc},${nr}`] = val;
+        }
+        layout.tileColors = newColors;
+      }
+
+      officeState.rebuildFromLayout(layout, direction === 'left' || direction === 'up');
+      setEditorTick((t) => t + 1);
+    },
+    [getOfficeState, pushUndo]
+  );
+
   const handleZoomChange = useCallback((newZoom: number) => {
     const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.floor(newZoom)));
     setZoom(clamped);
@@ -236,6 +292,8 @@ export function useEditorActions(getOfficeState: () => OfficeState, editorState:
     editorTick,
     zoom,
     panRef,
+    canUndo: undoStack.current.length > 0,
+    canRedo: redoStack.current.length > 0,
     handleToggleEditMode,
     handleToolChange,
     handleTileTypeChange,
@@ -253,6 +311,7 @@ export function useEditorActions(getOfficeState: () => OfficeState, editorState:
     handleSave,
     handleReset,
     handleDragMove,
+    handleExpandGrid,
     handleZoomChange,
     handleOpenClaude,
     handleSelectedFurnitureColorChange,
