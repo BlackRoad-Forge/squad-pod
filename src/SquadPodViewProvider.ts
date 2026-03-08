@@ -13,8 +13,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { LayoutData, WebviewMessage, OutboundMessage, AgentDetailInfo, TelemetryEvent, SquadInfoData } from './types.js';
+import type { LayoutData, WebviewMessage, OutboundMessage, AgentDetailInfo, TelemetryEvent, SquadInfoData, TilesetData, CharacterAssetEntry } from './types.js';
 import {
+  CUSTOM_CHAR_SPRITE_PREFIX,
   GLOBAL_KEY_SOUND_ENABLED,
   WORKSPACE_KEY_LAYOUT,
 } from './constants.js';
@@ -191,23 +192,26 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
       },
     });
 
-    // 3. Load and send assets
+    // 3. Load and send assets (inline pixel data — legacy/fallback)
     this.loadAndSendAssets();
 
-    // 4. Load and send layout
+    // 4. Send custom asset URIs (tileset + character PNGs for browser-side loading)
+    this.loadAndSendCustomAssetUris();
+
+    // 5. Load and send layout
     this.loadAndSendLayout(workspaceRoot);
 
-    // 5. Send existing agents (full state dump)
+    // 6. Send existing agents (full state dump)
     sendExistingAgents(agents, this.context, webview);
 
-    // 6. Send sound setting
+    // 7. Send sound setting
     const soundEnabled = this.context.globalState.get<boolean>(
       GLOBAL_KEY_SOUND_ENABLED,
       true,
     );
     this.postMessage({ type: 'soundEnabled', enabled: soundEnabled });
 
-    // 7. Start watching layout file for external changes
+    // 8. Start watching layout file for external changes
     this.disposeLayoutWatcher?.dispose();
     this.disposeLayoutWatcher = watchLayoutFile(workspaceRoot, (layout) => {
       this.postMessage({ type: 'layoutLoaded', layout });
@@ -242,6 +246,66 @@ export class SquadPodViewProvider implements vscode.WebviewViewProvider {
     const furniture = loadFurnitureAssets(extPath);
     if (furniture.length > 0) {
       this.postMessage({ type: 'furnitureLoaded', furniture });
+    }
+  }
+
+  // ─── Custom Asset URIs ──────────────────────────────────────────
+
+  /**
+   * Send webview-safe URIs for the custom tileset and character sprite
+   * sheets.  The webview loads these PNGs via `new Image()` in the
+   * browser, avoiding the extension-host PNG-decode + pixel-array
+   * overhead of the legacy inline-sprite pipeline.
+   *
+   * Assets are expected in `dist/assets/` (copied by the esbuild
+   * copy-assets plugin from `webview-ui/public/assets/`).
+   */
+  private loadAndSendCustomAssetUris(): void {
+    const webview = this.view?.webview;
+    if (!webview) { return; }
+
+    const assetsDir = path.join(this.context.extensionPath, 'dist', 'assets');
+
+    // ── Tileset (office furniture spritesheet + JSON coordinate map) ──
+    const tilesetPngPath = path.join(assetsDir, 'tileset_office.png');
+    const tilesetJsonPath = path.join(assetsDir, 'tileset.json');
+
+    if (fs.existsSync(tilesetPngPath) && fs.existsSync(tilesetJsonPath)) {
+      try {
+        const tilesetData: TilesetData = JSON.parse(
+          fs.readFileSync(tilesetJsonPath, 'utf-8'),
+        );
+        const tilesetPngUri = webview
+          .asWebviewUri(vscode.Uri.file(tilesetPngPath))
+          .toString();
+
+        this.postMessage({
+          type: 'tilesetAssetsLoaded',
+          tilesetPngUri,
+          tilesetData,
+        });
+      } catch {
+        // tileset.json malformed or unreadable — skip
+      }
+    }
+
+    // ── Custom character sprite sheets (char_employeeA–D.png) ────────
+    const charsDir = path.join(assetsDir, 'characters');
+    if (fs.existsSync(charsDir)) {
+      const customCharFiles = fs.readdirSync(charsDir)
+        .filter(f => f.startsWith(CUSTOM_CHAR_SPRITE_PREFIX) && f.endsWith('.png'))
+        .sort();
+
+      if (customCharFiles.length > 0) {
+        const characters: CharacterAssetEntry[] = customCharFiles.map(file => ({
+          id: path.basename(file, '.png'),
+          uri: webview
+            .asWebviewUri(vscode.Uri.file(path.join(charsDir, file)))
+            .toString(),
+        }));
+
+        this.postMessage({ type: 'characterAssetsLoaded', characters });
+      }
     }
   }
 

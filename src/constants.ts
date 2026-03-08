@@ -8,6 +8,10 @@ export const TOOL_DONE_DELAY_MS = 300;
 export const BASH_COMMAND_DISPLAY_MAX_LENGTH = 30;
 export const TASK_DESCRIPTION_DISPLAY_MAX_LENGTH = 40;
 
+// ─── Grid ───────────────────────────────────────────────────────────
+/** Canonical tile size in pixels — all tileset and character assets must match. */
+export const TILE_SIZE = 16;
+
 // ─── PNG / Asset Parsing ────────────────────────────────────────────
 export const PNG_ALPHA_THRESHOLD = 128;
 export const WALL_PIECE_WIDTH = 16;
@@ -15,12 +19,20 @@ export const WALL_PIECE_HEIGHT = 32;
 export const WALL_GRID_COLS = 4;
 export const WALL_BITMASK_COUNT = 16;
 export const FLOOR_PATTERN_COUNT = 7;
-export const FLOOR_TILE_SIZE = 16;
+export const FLOOR_TILE_SIZE = TILE_SIZE;
 export const CHARACTER_DIRECTIONS = ['down', 'up', 'right'] as const;
 export const CHAR_FRAME_W = 16;
 export const CHAR_FRAME_H = 32;
 export const CHAR_FRAMES_PER_ROW = 7;
 export const CHAR_COUNT = 6;
+
+// ─── Custom Asset Sprites (4-direction character sheets) ────────────
+/**
+ * Row order in the custom character sprite sheets (char_employeeA–D.png).
+ * Row 0 = up (away), Row 1 = right, Row 2 = down (toward), Row 3 = left.
+ */
+export const CUSTOM_CHAR_DIRECTIONS = ['up', 'right', 'down', 'left'] as const;
+export const CUSTOM_CHAR_SPRITE_PREFIX = 'char_employee';
 
 // ─── Layout Persistence ─────────────────────────────────────────────
 export const LAYOUT_FILE_DIR = '.squad-pod';

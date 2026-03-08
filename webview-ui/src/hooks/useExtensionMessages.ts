@@ -269,6 +269,17 @@ export function useExtensionMessages(
           break;
         }
 
+        case 'assetBaseUrl': {
+          const { url } = message;
+          if (url) {
+            import('../office/sprites/assetLoader.js').then(({ setAssetBaseUrl, loadAssets }) => {
+              setAssetBaseUrl(url);
+              loadAssets();
+            });
+          }
+          break;
+        }
+
         case 'agentDetailLoaded': {
           const { detail } = message;
           setAgentDetail(detail);

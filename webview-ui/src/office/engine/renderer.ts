@@ -34,6 +34,9 @@ import { getCachedSprite, getOutlineSprite } from '../sprites/spriteCache.js';
 import { getCharacterSprites, BUBBLE_PERMISSION_SPRITE, BUBBLE_WAITING_SPRITE } from '../sprites/defaultCharacters.js';
 import { getColorizedFloorSprite } from '../floorTiles.js';
 import { wallColorToHex } from '../wallTiles.js';
+import { areAssetsReady } from '../sprites/assetLoader.js';
+import { drawTilesetFurniture } from '../sprites/tilesetRenderer.js';
+import { drawCharacterFromSheet, getCharacterSheetOffset } from '../sprites/characterSheetRenderer.js';
 
 interface Drawable {
   sprite: SpriteData;
@@ -43,6 +46,13 @@ interface Drawable {
   type: 'furniture' | 'character';
   outlineSprite?: SpriteData;
   outlineAlpha?: number;
+  /** Furniture type for PNG tileset lookup. */
+  furnitureType?: string;
+  /** Furniture footprint in pixels at current zoom (for tileset rendering). */
+  furnitureDestW?: number;
+  furnitureDestH?: number;
+  /** Character reference for PNG sprite sheet rendering. */
+  character?: Character;
 }
 
 export function renderTileGrid(
@@ -97,19 +107,25 @@ export function renderScene(
   hoveredAgentId: string | null
 ): void {
   const drawables: Drawable[] = [];
+  const pngReady = areAssetsReady();
 
   for (const furn of furniture) {
     const sprite = furn.sprite;
     const x = offsetX + furn.col * TILE_SIZE * zoom;
     const y = offsetY + furn.row * TILE_SIZE * zoom;
     const bottomY = y + sprite.length * zoom;
-    drawables.push({ sprite, x, y, z: bottomY, type: 'furniture' });
+    drawables.push({
+      sprite, x, y, z: bottomY, type: 'furniture',
+      furnitureType: furn.type,
+      furnitureDestW: sprite[0].length * zoom,
+      furnitureDestH: sprite.length * zoom,
+    });
   }
 
   for (const ch of characters) {
     const sprites = getCharacterSprites(ch.palette, ch.hueShift);
     const sprite = getCharacterSprite(ch, sprites);
-    
+
     let baseX = ch.col * TILE_SIZE;
     let baseY = ch.row * TILE_SIZE;
 
@@ -123,15 +139,30 @@ export function renderScene(
       baseY = fromY + (toY - fromY) * ch.moveProgress;
     }
 
-    const spriteWidth = sprite[0].length;
-    const x = offsetX + (baseX + TILE_SIZE / 2 - spriteWidth / 2) * zoom;
-    let y = offsetY + (baseY + TILE_SIZE - sprite.length) * zoom;
+    // Determine sprite dimensions — prefer PNG sheet size when available
+    let spriteWidth: number;
+    let spriteHeight: number;
+    let drawX: number;
+    let drawY: number;
 
-    if (ch.state === CharacterState.TYPE) {
-      y += CHARACTER_SITTING_OFFSET_PX * zoom;
+    const sheetOffset = pngReady ? getCharacterSheetOffset(ch.palette) : null;
+    if (sheetOffset) {
+      spriteWidth = TILE_SIZE - sheetOffset.dx * 2; // symmetric around tile center
+      spriteHeight = TILE_SIZE - sheetOffset.dy;
+      drawX = offsetX + (baseX + sheetOffset.dx) * zoom;
+      drawY = offsetY + (baseY + sheetOffset.dy) * zoom;
+    } else {
+      spriteWidth = sprite[0].length;
+      spriteHeight = sprite.length;
+      drawX = offsetX + (baseX + TILE_SIZE / 2 - spriteWidth / 2) * zoom;
+      drawY = offsetY + (baseY + TILE_SIZE - spriteHeight) * zoom;
     }
 
-    const bottomY = y + sprite.length * zoom;
+    if (ch.state === CharacterState.TYPE) {
+      drawY += CHARACTER_SITTING_OFFSET_PX * zoom;
+    }
+
+    const bottomY = drawY + spriteHeight * zoom;
     const z = bottomY + CHARACTER_Z_SORT_OFFSET;
 
     const outlineSprite = getOutlineSprite(sprite);
@@ -142,7 +173,11 @@ export function renderScene(
       outlineAlpha = HOVERED_OUTLINE_ALPHA;
     }
 
-    drawables.push({ sprite, x, y, z, type: 'character', outlineSprite, outlineAlpha });
+    drawables.push({
+      sprite, x: drawX, y: drawY, z, type: 'character',
+      outlineSprite, outlineAlpha,
+      character: ch,
+    });
   }
 
   drawables.sort((a, b) => a.z - b.z);
@@ -159,10 +194,26 @@ export function renderScene(
     }
 
     if (drawable.type === 'character') {
-      drawSpriteDirect(ctx, drawable.sprite, drawable.x, drawable.y, zoom);
+      const ch = drawable.character;
+      // Try PNG sprite sheet first, fall back to inline
+      const pngDrawn = ch && pngReady && drawCharacterFromSheet(
+        ctx, ch.palette, ch.direction, ch.frameIndex,
+        drawable.x, drawable.y, zoom,
+      );
+      if (!pngDrawn) {
+        drawSpriteDirect(ctx, drawable.sprite, drawable.x, drawable.y, zoom);
+      }
     } else {
-      const canvas = getCachedSprite(drawable.sprite, zoom);
-      ctx.drawImage(canvas, drawable.x, drawable.y);
+      // Try PNG tileset first, fall back to inline cached sprite
+      const tilesetDrawn = pngReady && drawable.furnitureType && drawTilesetFurniture(
+        ctx, drawable.furnitureType,
+        drawable.x, drawable.y,
+        drawable.furnitureDestW!, drawable.furnitureDestH!,
+      );
+      if (!tilesetDrawn) {
+        const canvas = getCachedSprite(drawable.sprite, zoom);
+        ctx.drawImage(canvas, drawable.x, drawable.y);
+      }
     }
   }
 }

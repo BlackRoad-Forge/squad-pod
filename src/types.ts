@@ -95,6 +95,36 @@ export interface CharacterSpriteSet {
   };
 }
 
+// ─── Custom Tileset Assets ──────────────────────────────────────────
+
+/** Coordinate region within a tileset PNG (pixel coordinates and dimensions). */
+export interface TilesetObjectRegion {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Parsed content of tileset.json — maps object names to pixel regions
+ * in the tileset PNG.  Sent to the webview so it can slice the
+ * spritesheet without extension-host PNG decoding.
+ */
+export interface TilesetData {
+  name: string;
+  tile_size: number;
+  source: string;
+  objects: Record<string, TilesetObjectRegion>;
+}
+
+/** Webview-safe URI for a single custom character sprite sheet. */
+export interface CharacterAssetEntry {
+  id: string;   // e.g. "char_employeeA"
+  uri: string;  // webview-safe URI string (from webview.asWebviewUri)
+}
+
+// ─── Telemetry ──────────────────────────────────────────────────────
+
 export type TelemetryCategory = 'status' | 'session' | 'log' | 'orchestration';
 
 export interface TelemetryEvent {
@@ -186,4 +216,6 @@ export type OutboundMessage =
   | { type: 'agentDetailLoaded'; detail: AgentDetailInfo }
   | { type: 'squadInfoLoaded'; info: SquadInfoData }
   | { type: 'telemetryEvent'; event: TelemetryEvent }
+  | { type: 'tilesetAssetsLoaded'; tilesetPngUri: string; tilesetData: TilesetData }
+  | { type: 'characterAssetsLoaded'; characters: CharacterAssetEntry[] }
   | { type: 'noWorkspace' };
