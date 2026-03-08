@@ -205,10 +205,18 @@ Established dual-build infrastructure (esbuild + Vite), TypeScript interfaces fo
 2. **Object name mismatch between metadata and legacy paths:** The extension sent EITHER `tilesetMetadataLoaded` (metadata item IDs like `desk_work_monitor`) OR `tilesetAssetsLoaded` (tileset.json names like `work_desk_v1`), never both. The renderer's `furnitureToTileset` mapping uses tileset.json names.
 
 **Fix:**
-- `assetLoader.ts`: `setTilesetMetadata()` now sets `assetsReady = true` in `img.onload`. New `setLegacyTilesetAssets()` function populates `tilesetData` with correct tileset.json names.
-- `useExtensionMessages.ts`: Added `tilesetAssetsLoaded` handler
-- `SquadPodViewProvider.ts`: Now always sends BOTH metadata + legacy messages
+- `src/assetLoading.ts`: All asset ingestion paths now set `assetsReady = true`:
+  - `loadAssets()` — URL fetch path (existing)
+  - `setTilesetMetadata()` — metadata ingestion path (NEW)
+  - `setTilesetAssets()` — legacy format path (NEW)
+- `src/SquadPodViewProvider.ts`: Extension now always sends BOTH message types when both JSON files exist
+  - `tilesetMetadataLoaded` for metadata-driven features
+  - `tilesetAssetsLoaded` for current legacy renderer
+
+**Key Decision:** Always send both tileset formats. Cheap to send (browser caches PNG), separates concerns, preserves backward compatibility. (See `.squad/decisions.md` § 10)
 
 **Key Pattern:** When two data formats exist for the same asset, send both. The `assetsReady` flag must be set by ALL ingestion paths.
 
 **Test Results:** All 124 tests pass, both builds clean.
+
+**Outcome:** ✅ SUCCESS — Sprite asset loading now fully functional via both metadata and legacy paths.
