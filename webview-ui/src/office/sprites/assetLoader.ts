@@ -12,6 +12,7 @@
  */
 
 import { TILE_SIZE } from '../types.js';
+import { EMBEDDED_CHARACTERS } from './embeddedCharacters.js';
 
 // ── Types — legacy tileset.json format ────────────────────────────
 
@@ -545,3 +546,92 @@ export function loadAssets(): Promise<void> {
 
   return loadingPromise;
 }
+
+// ── Embedded character bootstrap ──────────────────────────────────
+// Load character sprites from data URIs embedded directly in the JS
+// bundle.  This runs at module initialization time, BEFORE any
+// postMessage can arrive, guaranteeing sprites are available for the
+// very first render frame.  The postMessage path
+// (loadCharacterSheetsFromUris) can still override these later.
+
+function loadEmbeddedCharacters(): void {
+  if (EMBEDDED_CHARACTERS.length === 0) return;
+  console.error('[SPRITE-DEBUG] loadEmbeddedCharacters: loading', EMBEDDED_CHARACTERS.length, 'embedded sheets');
+
+  for (const { id, uri } of EMBEDDED_CHARACTERS) {
+    const key = id.replace(/^char_employee/, '');
+    if (!key || !uri.startsWith('data:image/png;base64,')) continue;
+
+    const img = new Image();
+    img.src = uri;
+
+    // Data URIs decode synchronously in all modern browsers and Electron.
+    // After setting .src, .complete is immediately true and dimensions
+    // are available.  No need for onload.
+    if (img.complete && img.naturalWidth > 0) {
+      try {
+        const processed = removeBackground(img);
+        const rows = 4;
+        const frameHeight = img.height / rows;
+        const scale = Math.max(1, Math.round(frameHeight / TILE_SIZE));
+        const baseHeight = Math.round(frameHeight / scale);
+        const framesPerRow = img.width % 7 === 0 ? 7 : Math.max(1, Math.round(img.width / Math.max(1, frameHeight)));
+        const frameWidth = Math.round(img.width / (framesPerRow || 7));
+        const baseWidth = Math.round(frameWidth / scale);
+
+        characterSheets.set(key, {
+          image: processed,
+          frameWidth,
+          frameHeight,
+          framesPerRow: framesPerRow || 7,
+          rows,
+          scale,
+          baseWidth,
+          baseHeight,
+        });
+        expectedCharacterSheetKeys.add(key);
+        loadedCharacterSheetKeys.add(key);
+        console.error(`[SPRITE-DEBUG] ✅ Embedded sheet "${key}" loaded synchronously: ${img.width}×${img.height}, scale=${scale}`);
+      } catch (e) {
+        console.error(`[SPRITE-DEBUG] ❌ Embedded sheet "${key}" processing failed:`, e);
+      }
+    } else {
+      // Fallback: rare case where data URI didn't decode synchronously.
+      // Use onload.
+      console.error(`[SPRITE-DEBUG] Embedded sheet "${key}" not immediate, using onload`);
+      trackImage(img);
+      expectedCharacterSheetKeys.add(key);
+      img.onload = () => {
+        try {
+          const processed = removeBackground(img);
+          const rows = 4;
+          const frameHeight = img.height / rows;
+          const scale = Math.max(1, Math.round(frameHeight / TILE_SIZE));
+          const baseHeight = Math.round(frameHeight / scale);
+          const framesPerRow = img.width % 7 === 0 ? 7 : Math.max(1, Math.round(img.width / Math.max(1, frameHeight)));
+          const frameWidth = Math.round(img.width / (framesPerRow || 7));
+          const baseWidth = Math.round(frameWidth / scale);
+
+          characterSheets.set(key, {
+            image: processed,
+            frameWidth,
+            frameHeight,
+            framesPerRow: framesPerRow || 7,
+            rows,
+            scale,
+            baseWidth,
+            baseHeight,
+          });
+          loadedCharacterSheetKeys.add(key);
+          console.error(`[SPRITE-DEBUG] ✅ Embedded sheet "${key}" loaded via onload: ${img.width}×${img.height}`);
+        } catch (e) {
+          console.error(`[SPRITE-DEBUG] ❌ Embedded sheet "${key}" onload processing failed:`, e);
+        }
+      };
+    }
+  }
+  console.error('[SPRITE-DEBUG] loadEmbeddedCharacters done. characterSheets.size:', characterSheets.size);
+}
+
+// Bootstrap: load embedded characters immediately at module init time.
+loadEmbeddedCharacters();
